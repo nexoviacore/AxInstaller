@@ -1,0 +1,51 @@
+<axprops>
+	<lds>f</lds>
+	<isdirectsave>true</isdirectsave>
+	<isbelow9x>false</isbelow9x>
+	<skin>Grey</skin>
+	<lastlogin>orclqa113</lastlogin>
+	<lastusername>admin</lastusername>
+	<login>local</login>
+	<axhelp>true</axhelp>
+	<oradatestring>dd/mm/yyyy hh24:mi:ss</oradatestring>
+	<crlocation/>
+	<lastusername>admin</lastusername>
+	<logmode>Remote</logmode>
+	<login>local</login>
+	<ipaddress>192.168.1.58</ipaddress>
+	<showuser>t</showuser>
+	<vkeypad>true</vkeypad>
+	<slash>/</slash>
+	<url>http://192.168.1.125/scripts/prsdbx.exe/soap/IPRSDBX</url>
+	<ftp>localhost,karthik-lap\admin,Agile@123</ftp>
+	<xoradatestring>dd/mm/yyyy hh24:mi:ss</xoradatestring>
+	<talkinterval>15000</talkinterval>
+	<trace>true</trace>
+	<clientlogin>producttestapp</clientlogin>
+	<serverlogin/>
+	<maxlog>3</maxlog>
+	<syncsend>G:\root\sync\</syncsend>
+	<syncrec>G:\root\sync\</syncrec>
+	<picklistmode></picklistmode>
+	<font>Verdana,9,clMaroon</font>
+	<project>producttestapp</project>
+	<xtype>both</xtype>
+	<log>true</log>
+	<trayapp>false</trayapp>
+	<adrtimeout>300000</adrtimeout>
+	<adetimeout>300000</adetimeout>
+	<pagesize>0</pagesize>
+	<maxruntime/>
+	<multiinstance>false</multiinstance>
+	<sitenos></sitenos>
+	<maxpps>25</maxpps>
+	<httpurl>Http://192.168.2.215/axpertscripts/ADS.dll/datasnap/rest/TServerMethods1/</httpurl>
+	<ishttp>false</ishttp>
+	<directinsert>false</directinsert>
+	<unamesql>select a1.firstname from empma a1 join wualla a2 on a2.empid = a1.empmaid where a2.wuname in (:username)</unamesql>
+	<domain>
+		<multiselect>multiselect</multiselect>
+		<printform>printform</printform>
+	</domain>
+	<lastlang>ENGLISH</lastlang>
+</axprops>

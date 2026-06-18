@@ -1,0 +1,343 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{DF387388-C490-41F3-A409-3BBCDC2991E5}</ProjectGuid>
+        <ProjectVersion>14.4</ProjectVersion>
+        <FrameworkType>None</FrameworkType>
+        <MainSource>AxInstaller1.dpr</MainSource>
+        <Base>True</Base>
+        <Config Condition="'$(Config)'==''">Release</Config>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <TargetedPlatforms>3</TargetedPlatforms>
+        <AppType>Console</AppType>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='OSX32' and '$(Base)'=='true') or '$(Base_OSX32)'!=''">
+        <Base_OSX32>true</Base_OSX32>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
+        <Base_Win32>true</Base_Win32>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
+        <Base_Win64>true</Base_Win64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_1)'!=''">
+        <Cfg_1>true</Cfg_1>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win32)'!=''">
+        <Cfg_1_Win32>true</Cfg_1_Win32>
+        <CfgParent>Cfg_1</CfgParent>
+        <Cfg_1>true</Cfg_1>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win64)'!=''">
+        <Cfg_1_Win64>true</Cfg_1_Win64>
+        <CfgParent>Cfg_1</CfgParent>
+        <Cfg_1>true</Cfg_1>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
+        <Cfg_2>true</Cfg_2>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='OSX32' and '$(Cfg_2)'=='true') or '$(Cfg_2_OSX32)'!=''">
+        <Cfg_2_OSX32>true</Cfg_2_OSX32>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win32)'!=''">
+        <Cfg_2_Win32>true</Cfg_2_Win32>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win64)'!=''">
+        <Cfg_2_Win64>true</Cfg_2_Win64>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
+        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_E>false</DCC_E>
+        <DCC_N>false</DCC_N>
+        <DCC_S>false</DCC_S>
+        <DCC_F>false</DCC_F>
+        <DCC_K>false</DCC_K>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_OSX32)'!=''">
+        <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
+        <DCC_UsePackage>DBXSqliteDriver;fmx;IndySystem;DBXInterBaseDriver;DataSnapClient;DataSnapCommon;DataSnapServer;DataSnapProviderClient;DbxCommonDriver;dbxcds;DBXOracleDriver;CustomIPTransport;dsnap;IndyIPServer;fmxase;IndyCore;IndyIPCommon;inetdbxpress;bindcompfmx;rtl;dbrtl;DbxClientDriver;bindcomp;inetdb;xmlrtl;ibxpress;IndyProtocols;DBXMySQLDriver;bindengine;soaprtl;bindcompdbx;DBXInformixDriver;DBXFirebirdDriver;inet;fmxobj;DBXSybaseASADriver;fmxdae;dbexpress;DataSnapIndy10ServerTransport;IndyIPClient;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win32)'!=''">
+        <DCC_UsePackage>dac170;DBXSqliteDriver;fmx;IndySystem;TeeDB;frxHTML17;vclib;inetdbbde;DBXInterBaseDriver;DataSnapClient;DataSnapCommon;DataSnapServer;DataSnapProviderClient;DBXSybaseASEDriver;DbxCommonDriver;vclimg;dbxcds;DatasnapConnectorsFreePascal;MetropolisUILiveTile;frxIBX17;fsBDE17;vcldb;vcldsnap;dacvcl170;frxIntIOIndy17;DBXDb2Driver;DBXOracleDriver;CustomIPTransport;vclribbon;dsnap;IndyIPServer;fmxase;vcl;IndyCore;odac170;IndyIPCommon;CloudService;DBXMSSQLDriver;FmxTeeUI;CodeSiteExpressPkg;DbxDevartOracleDriver170;frxDB17;fsIBX17;inetdbxpress;webdsnap;adortl;odacvcl170;odacfmx170;frx17;fs17;PngComponentsD;frxTee17;bindcompfmx;frxDBX17;vcldbx;oraprov170;fsTee17;rtl;dbrtl;DbxClientDriver;bindcomp;inetdb;frxcs17;Tee;DBXOdbcDriver;xmlrtl;svnui;ibxpress;IndyProtocols;DBXMySQLDriver;frxIntIO17;vclactnband;bindengine;soaprtl;bindcompdbx;FMXTee;TeeUI;bindcompvcl;fsADO17;vclie;frxADO17;DbxDevartMySqlDriver170;vcltouch;websnap;DbxDevartPostgreSQLDriver170;VclSmp;DBXInformixDriver;Intraweb;DataSnapConnectors;dsnapcon;DBXFirebirdDriver;inet;dacfmx170;fmxobj;frxPDF17;fsDB17;vclx;frxe17;svn;DBXSybaseASADriver;fmxdae;bdertl;crcontrols170;frxBDE17;dbexpress;DataSnapIndy10ServerTransport;IndyIPClient;$(DCC_UsePackage)</DCC_UsePackage>
+        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win64)'!=''">
+        <DCC_UsePackage>DBXSqliteDriver;fmx;IndySystem;TeeDB;vclib;DBXInterBaseDriver;DataSnapClient;DataSnapCommon;DataSnapServer;DataSnapProviderClient;DBXSybaseASEDriver;DbxCommonDriver;vclimg;dbxcds;DatasnapConnectorsFreePascal;vcldb;vcldsnap;DBXDb2Driver;DBXOracleDriver;CustomIPTransport;dsnap;IndyIPServer;fmxase;vcl;IndyCore;IndyIPCommon;DBXMSSQLDriver;inetdbxpress;webdsnap;adortl;bindcompfmx;rtl;dbrtl;DbxClientDriver;bindcomp;inetdb;Tee;DBXOdbcDriver;xmlrtl;ibxpress;IndyProtocols;DBXMySQLDriver;vclactnband;bindengine;soaprtl;bindcompdbx;TeeUI;bindcompvcl;vclie;vcltouch;websnap;VclSmp;DBXInformixDriver;DataSnapConnectors;dsnapcon;DBXFirebirdDriver;inet;fmxobj;vclx;DBXSybaseASADriver;fmxdae;dbexpress;DataSnapIndy10ServerTransport;IndyIPClient;$(DCC_UsePackage)</DCC_UsePackage>
+        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1)'!=''">
+        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+        <DCC_DebugDCUs>true</DCC_DebugDCUs>
+        <DCC_Optimize>false</DCC_Optimize>
+        <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
+        <DCC_DebugInfoInExe>true</DCC_DebugInfoInExe>
+        <DCC_RemoteDebug>true</DCC_RemoteDebug>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
+        <Manifest_File>None</Manifest_File>
+        <DCC_DcuOutput>D:\Axpert Project\__dcus\Axpert32\</DCC_DcuOutput>
+        <DCC_ExeOutput>D:\Axpert_Project\installer_Axpert[32bit]\</DCC_ExeOutput>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_Define>ForService;withsmtp;withsmtp;$(DCC_Define)</DCC_Define>
+        <DCC_UnitSearchPath>D:\ParokshAgile\Delphi Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources;D:\ParokshAgile\Delphi Supporting Files\PowerPDFXe3;D:\ParokshAgile\Delphi Supporting Files\PNGComponents-master - New\PNGComponents-master\Source;D:\ParokshAgile\Delphi Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17x64;D:\Workspace\Indy-Indy-10.6.3.3 (1)\Indy-Indy-10.6.3.3\Lib\System;D:\Workspace\Indy-Indy-10.6.3.3 (1)\Indy-Indy-10.6.3.3\Lib\Protocols;D:\Workspace\Indy-Indy-10.6.3.3 (1)\Indy-Indy-10.6.3.3\Lib\Core;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_Namespace>Vcl;Vcl.Shell;Vcl.Imaging;Vcl.Samples;Vcl.Touch;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_RemoteDebug>false</DCC_RemoteDebug>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
+        <DCC_MapFile>3</DCC_MapFile>
+        <DCC_Define>ForService;withsmtp;withsmtp;NOT ForRestDll;$(DCC_Define)</DCC_Define>
+        <DCC_Namespace>Vcl;Vcl.Shell;Bde;Vcl.Imaging;Vcl.Samples;Vcl.Touch;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_ExeOutput>D:\WorkSpace\Delphi\install_plugin_v1\Output\Win64</DCC_ExeOutput>
+        <DCC_UnitSearchPath>E:\Supporting Files\PowerPDFXE3;E:\Supporting Files\Indy-Indy-10.6.3.3\Lib\System;E:\Supporting Files\Indy-Indy-10.6.3.3\Lib\Protocols;E:\Supporting Files\Indy-Indy-10.6.3.3\Lib\Core;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_DcuOutput>E:\WorkSpace\PROJECT DCUS\64bit\AxInstaller_dEBUG</DCC_DcuOutput>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <Manifest_File>None</Manifest_File>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2)'!=''">
+        <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
+        <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
+        <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
+        <DCC_DebugInformation>false</DCC_DebugInformation>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_OSX32)'!=''">
+        <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
+        <Manifest_File>D:\Axpert_Project\installer_Axpert[32bit]\app.manifest</Manifest_File>
+        <VerInfo_Keys>CompanyName=Agile Labs Pvt.Ltd.;FileDescription=Axpert Patch and Plugin Installer [32bit];FileVersion=1.0.0.0;InternalName=AxInstaller;LegalCopyright=Agile Labs Pvt.Ltd.;LegalTrademarks=Axpert;OriginalFilename=AxInstaller;ProductName=Axpert;ProductVersion=1.0.0.0;Comments=32bit[06082024]</VerInfo_Keys>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <DCC_Define>ForService;withsmtp;withsmtp;$(DCC_Define)</DCC_Define>
+        <DCC_UnitSearchPath>D:\ParokshAgile\Delphi Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources;D:\ParokshAgile\Delphi Supporting Files\PowerPDFXe3;D:\ParokshAgile\Delphi Supporting Files\PNGComponents-master - New\PNGComponents-master\Source;D:\ParokshAgile\Delphi Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17x64;D:\Workspace\Indy-Indy-10.6.3.3 (1)\Indy-Indy-10.6.3.3\Lib\System;D:\Workspace\Indy-Indy-10.6.3.3 (1)\Indy-Indy-10.6.3.3\Lib\Protocols;D:\Workspace\Indy-Indy-10.6.3.3 (1)\Indy-Indy-10.6.3.3\Lib\Core;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_DcuOutput>D:\Axpert Project\__dcus\Axpert32\</DCC_DcuOutput>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_Namespace>Vcl;Vcl.Shell;Vcl.Imaging;Vcl.Samples;Vcl.Touch;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_ExeOutput>C:\Users\paroksh.AGILELABS\Desktop\FinalOutputDir\AxInstaller_V1\AxInstaller[32bit]\</DCC_ExeOutput>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
+        <VerInfo_Keys>CompanyName=Agile Labs Pvt.Ltd;FileDescription=Axpert Patch and Plugin Installer(64bit) (07112024);FileVersion=1.0.0.0;InternalName=AxInstaller;LegalCopyright=Agile Labs Pvt.Ltd;LegalTrademarks=Axpert;OriginalFilename=AxInstaller;ProductName=Axpert;ProductVersion=1.0.0.0;Comments=64Bit (07112024)</VerInfo_Keys>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <DCC_Define>ForService;withsmtp;withsmtp;$(DCC_Define)</DCC_Define>
+        <Manifest_File>app.manifest</Manifest_File>
+        <DCC_Namespace>Vcl;Vcl.Shell;Bde;Vcl.Imaging;Vcl.Samples;Vcl.Touch;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_ExeOutput>D:\WorkSpace\Delphi\install_plugin_v1\Output\Win64</DCC_ExeOutput>
+        <DCC_UnitSearchPath>E:\Supporting Files\PowerPDFXE3;E:\Supporting Files\Indy-Indy-10.6.3.3\Lib\System;E:\Supporting Files\Indy-Indy-10.6.3.3\Lib\Protocols;E:\Supporting Files\Indy-Indy-10.6.3.3\Lib\Core;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_DcuOutput>E:\WorkSpace\PROJECT DCUS\64bit\AxInstallerRelease</DCC_DcuOutput>
+    </PropertyGroup>
+    <ItemGroup>
+        <DelphiCompile Include="$(MainSource)">
+            <MainSource>MainSource</MainSource>
+        </DelphiCompile>
+        <DCCReference Include="uInItApp.pas"/>
+        <DCCReference Include="uUtils.pas"/>
+        <DCCReference Include="IISManager.pas"/>
+        <DCCReference Include="uConfig.pas"/>
+        <DCCReference Include="uGitManager.pas"/>
+        <DCCReference Include="uInstallation.pas"/>
+        <DCCReference Include="uDbConnect.pas"/>
+        <DCCReference Include="uGitAccessToken.pas"/>
+        <DCCReference Include="uImportStructures.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert2\Ver3.3\Desktop\xcallservice.pas"/>
+        <DCCReference Include="\\192.168.2.6\ASB8.9-XE3\ASB 64 Bit for SIPF\Ver 8.9.0.5\Commonchanges for 64bit\uTreeObj.pas"/>
+        <DCCReference Include="\\192.168.2.6\ASB8.9-XE3\ASB 64 Bit for SIPF\Ver 8.9.0.5\Commonchanges for 64bit\UTprovideprintdata.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert2\Ver 8.6.8.2\uTPrinterSettings.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert2\Ver 8.4.8\UDosPrint.pas"/>
+        <DCCReference Include="\\192.168.2.6\ASB8.9-XE3\ASB 64 Bit for SIPF\Ver 8.9.0.5\UDosPrintDoc.pas"/>
+        <DCCReference Include="\\192.168.2.6\ASB8.9-XE3\ASB 64 Bit for SIPF\Ver 8.9.0.5\Commonchanges for 64bit\UDocObject.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert2\Ver 8.9.0.4\uMRPRun.pas"/>
+        <DCCReference Include="\\192.168.2.6\ASB8.9-XE3\ASB 64 Bit for SIPF\Ver 8.9.0.6\ufmASB.pas">
+            <Form>ASBModule</Form>
+            <DesignClass>TWebModule</DesignClass>
+        </DCCReference>
+        <DCCReference Include="\\192.168.2.6\ASB8.9-XE3\ASB 64 Bit for SIPF\Ver 8.9.0.7\MessageDigest_5.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.3\uDosObject.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.3\UPrintReport.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.4\uBOM.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.4\uFillStruct.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.4\uUpdateDependencies.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.5\uPDFPrint.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.0\ASB\uStructUpgrade.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.7\UConvSGridToHtml.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.7\uMSWord.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.7\Fix2\uAES.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.7\Fix2\uElAES.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.8\New Licensing Changes - 9.8latest\Asb\uAxpertLic.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.8\uMDMap.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.2\AxpManager\uUpdateMgr.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.2\AxpManager\uUpdateMgrVerDetails.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uASBT.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uASBTStruct.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.1\Fix2\uWMIHardwareID.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.3\asb\AXMLibrary.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.3\asb\AXMConnection.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.3\uCompress.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.4\AxpManager\uViewDef.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.5\AxpManager\uStoreDependencies.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.4\Asb\uAgileCloudObj.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.9\New UI  Changes\uListView.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.3\WebFix5\uSearchVal.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.6\uFrameSQL.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.8\uWorkFlow.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.1\WebFix3\uTasks.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.8\Webfix2\uDataExport.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.8\Webfix2\uDataImport.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.9\uPrintDocs.pas"/>
+        <DCCReference Include="E:\Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources\Redis.Client.pas"/>
+        <DCCReference Include="E:\Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources\Redis.Command.pas"/>
+        <DCCReference Include="E:\Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources\Redis.Commons.pas"/>
+        <DCCReference Include="E:\Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources\Redis.NetLib.Factory.pas"/>
+        <DCCReference Include="E:\Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources\Redis.NetLib.INDY.pas"/>
+        <DCCReference Include="E:\Supporting Files\REDIS CLIENT - DELPHI XE3 Support\sources\RedisMQ.Commands.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\uPropsXML.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uCreateStructure.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\uConnect.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uWorkFlowRuntime.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\uLicMgr.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\UProfitEVal.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uIViewTables.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uExecuteSQL.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uCreateIviewStructure.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\UParse.pas"/>
+        <DCCReference Include="uASBTStructObj.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uAutoPageCreate.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\uXSMTP.pas"/>
+        <DCCReference Include="uStoredata.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uASBCommonObj.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uAPILogging.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uAPILoggingImpl.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uAxProvider.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uDBManager.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uDoDebug.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uGeneralFunctions.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uProvidelink.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uXDS.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 10.9\WebFix4\uProfitQuery.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uStructInTable.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.0\uiViewXML.pas"/>
+        <DCCReference Include="uImportDiff.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.1\uImportStructDef.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\ASBPegRest_XE8\uAxPEG.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uValidate.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uStructDef.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\ASBPegRest_XE8\uAxAmend.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\ASBPegRest_XE8\uAxPEGActions.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uImport.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uDoCoreAction.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.2\uCreateIview.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uGetDependencies.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uAutoPrint.pas"/>
+        <DCCReference Include="uDataExchQueue.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uDbCall.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uFormNotifications.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uAxfastRun.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uPublishToRMQ.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uASBDataObj.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 9.7\Fix24\uValueStock.pas"/>
+        <DCCReference Include="\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uDWBExport.pas"/>
+        <DCCReference Include="uDWBPublish.pas"/>
+        <DCCReference Include="uInstallDbScripts.pas"/>
+        <DCCReference Include="uInstallRMQClients.pas"/>
+        <DCCReference Include="uUnIstallation.pas"/>
+        <DCCReference Include="uImportDefinition.pas"/>
+        <DCCReference Include="uPatchInstallation.pas"/>
+        <DCCReference Include="uAxLog.pas"/>
+        <BuildConfiguration Include="Release">
+            <Key>Cfg_2</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Base">
+            <Key>Base</Key>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Debug">
+            <Key>Cfg_1</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+    </ItemGroup>
+    <ProjectExtensions>
+        <BorlandProject>
+            <Delphi.Personality>
+                <VersionInfo>
+                    <VersionInfo Name="IncludeVerInfo">False</VersionInfo>
+                    <VersionInfo Name="AutoIncBuild">False</VersionInfo>
+                    <VersionInfo Name="MajorVer">1</VersionInfo>
+                    <VersionInfo Name="MinorVer">0</VersionInfo>
+                    <VersionInfo Name="Release">0</VersionInfo>
+                    <VersionInfo Name="Build">0</VersionInfo>
+                    <VersionInfo Name="Debug">False</VersionInfo>
+                    <VersionInfo Name="PreRelease">False</VersionInfo>
+                    <VersionInfo Name="Special">False</VersionInfo>
+                    <VersionInfo Name="Private">False</VersionInfo>
+                    <VersionInfo Name="DLL">False</VersionInfo>
+                    <VersionInfo Name="Locale">2057</VersionInfo>
+                    <VersionInfo Name="CodePage">1252</VersionInfo>
+                </VersionInfo>
+                <VersionInfoKeys>
+                    <VersionInfoKeys Name="CompanyName"/>
+                    <VersionInfoKeys Name="FileDescription"/>
+                    <VersionInfoKeys Name="FileVersion">1.0.0.0</VersionInfoKeys>
+                    <VersionInfoKeys Name="InternalName"/>
+                    <VersionInfoKeys Name="LegalCopyright"/>
+                    <VersionInfoKeys Name="LegalTrademarks"/>
+                    <VersionInfoKeys Name="OriginalFilename"/>
+                    <VersionInfoKeys Name="ProductName"/>
+                    <VersionInfoKeys Name="ProductVersion">1.0.0.0</VersionInfoKeys>
+                    <VersionInfoKeys Name="Comments"/>
+                    <VersionInfoKeys Name="CFBundleName"/>
+                    <VersionInfoKeys Name="CFBundleDisplayName"/>
+                    <VersionInfoKeys Name="CFBundleIdentifier"/>
+                    <VersionInfoKeys Name="CFBundleVersion"/>
+                    <VersionInfoKeys Name="CFBundlePackageType"/>
+                    <VersionInfoKeys Name="CFBundleSignature"/>
+                    <VersionInfoKeys Name="CFBundleAllowMixedLocalizations"/>
+                    <VersionInfoKeys Name="CFBundleExecutable"/>
+                </VersionInfoKeys>
+                <Source>
+                    <Source Name="MainSource">AxInstaller1.dpr</Source>
+                </Source>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k170.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp170.bpl">Microsoft Office XP Sample Automation Server Wrapper Components</Excluded_Packages>
+                </Excluded_Packages>
+            </Delphi.Personality>
+            <Deployment/>
+            <Platforms>
+                <Platform value="OSX32">False</Platform>
+                <Platform value="Win32">True</Platform>
+                <Platform value="Win64">True</Platform>
+            </Platforms>
+        </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
+        <Borland.Personality/>
+    </ProjectExtensions>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
+</Project>

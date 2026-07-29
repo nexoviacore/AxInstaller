@@ -1,0 +1,12 @@
+<connections><unittest>
+		<type>db</type>
+		<db>Postgre</db>
+		<version></version>
+		<driver>dbx</driver>
+		<dbcon>localhost</dbcon>
+		<dbuser>unittest</dbuser>
+		<structurl></structurl>
+		<dataurl></dataurl>
+		<pwd>000301590161015232163450607080013</pwd>
+	</unittest>
+</connections>

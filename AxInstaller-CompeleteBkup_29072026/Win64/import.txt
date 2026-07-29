@@ -1,0 +1,4 @@
+Executing ImportStructXMLandCreateTransactionTables...
+
+Transid : apidg
+Caption : API Plugin

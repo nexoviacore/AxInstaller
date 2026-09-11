@@ -1,0 +1,1643 @@
+unit uImportStructures;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Vcl.Graphics, Vcl.Controls,
+  Vcl.StdCtrls,
+  Data.db, XMLDoc,
+  XMLIntf, uxds, uAxProvider, uGeneralFunctions, uProfitEval,
+  IdBaseComponent, IdTCPConnection, IdTCPClient, IdFTP, IdComponent,
+  Vcl.ComCtrls,
+  Rio, SOAPHTTPClient, Vcl.buttons, Vcl.ExtCtrls, shellapi, uIviewXML, uxsmtp,
+  uStoreData,
+  uStructDef, uPDFPrint, xcallservice, adodb, Vcl.grids, uValidate,
+  uAutoPageCreate,
+  System.StrUtils, dateutils, uCreateIview, uCreateIviewStructure, uIviewTables,
+  uPropsXML, idGlobal, IdSMTP, IdSSLOpenSSL, IdMessage,
+  IdExplicitTLSClientServerBase, System.Generics.Collections,
+  idreplysmtp, MessageDigest_5, uStructInTable,
+  IdHTTP, uAxLog,
+  Soap.EncdDecd, IdCoder, IdCoder3to4, IdCoderMIME, uDBManager, uConnect,
+  uCompress, ZLib, {uImportDiff,} uImportStructDef, uAppIo, System.IOUtils,
+{$IF CompilerVersion > 24.0}
+  JSON
+{$ELSE}
+  DBXJson
+{$IFEND}
+    ;
+
+type
+  TImportStructures = class
+  private
+    // FImportDiff: TImportDiff;
+    // FImportStructDef: TImportStructDef;
+
+    Function WriteIviewDef(Fname, sDefaultPage, sStructXML: String): String;
+    Function WriteTStructDef(FileName: string; sXML: String): String;
+    Function MakeValidXMLString(pXMLString: String): String;
+    Function UpdateStructXML(structxml: string): string;
+    Function base64tostring(base64Data: String): string;
+    function DecompressXMLContent(pFilename: string): IXMLDocument;
+    Function ReadCompressFile(const FileName: string): String;
+    Function DeCompressFile(pCompressedFile: String): String;
+    Function GetUserPassword: String;
+    function PrepareSignInRequest: string;
+    procedure DoSignIn(const SignInURL: string;
+      out ARMSessionId, Token: string);
+
+  public
+    CoreParser: TProfitEval;
+    // dbm : TDBManager;
+    // axp : TAxprovider;
+    // connection : pConnection;
+    Function ImportStructure(FileName: string): String;
+    Function ReadFile(FileName: String): String;
+    constructor Create();
+    // Destructor Destroy; Override;
+    function InstallDataJson(ADataJsonFile: string): Boolean;
+
+  end;
+
+implementation
+
+uses uCreateStructure, uUtils, uImportDiff, IdHashMessageDigest;
+
+var
+  FImportDiff: TImportDiff;
+  FImportStructDef: TImportStructDef;
+
+constructor TImportStructures.Create;
+begin
+  AxStructures := Tlist<string>.Create;
+  FImportDiff := TImportDiff.Create(Axprovider, True);
+  FImportStructDef := TImportStructDef.Create(Axprovider, True);
+  FImportDiff.FImpDir := AppDir { getcurrentdir()+'\' };
+end;
+
+Function TImportStructures.base64tostring(base64Data: String): string;
+var
+  Decoder: TIdDecoderMIME;
+begin
+  Decoder := TIdDecoderMIME.Create(nil);
+  try
+    Result := Decoder.DecodeString(base64Data);
+  finally
+    Decoder.Free;
+  end;
+end;
+
+// Function TImportStructures.ReadXML(FileName : String):String;
+// var
+// SSLIOHandler: TIdSSLIOHandlerSocketOpenSSL;
+// IdHTTP1:TIdHTTP;
+// GitURL:string;
+// JSONObject:TJSONObject;
+// JSONPair:TJSONPair;
+// JSONString:String;
+// JSONValue:TJSONValue;
+// content:string;
+// NewLineChar,EmptySpace:string;
+// begin
+// IdHTTP1:=TIdHTTP.Create(nil);
+// Token:='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';
+// Owner:='Paroksh11';
+// reponame:='Axpert';
+// SSLIOHandler:=TIdSSLIOHandlerSocketOpenSSL.Create(IdHTTP1);
+// SSLIOHandler.SSLOptions.Method:=sslvTLSv1_2;
+// IdHTTP1.IOHandler:=SSLIOHandler;
+// IdHTTP1.Request.CustomHeaders.AddValue('Authorization', 'Bearer ' + Token);
+// JSONObject:=TJSONObject.Create;
+// //JObject:=TJSONObject.Create;
+// GitURL:=Format('https://api.github.com/repos/%s/%s/contents/Plugin/'+selectedPlugin+'/AxpertStructure/Forms/'+FileName,[Owner,reponame]);
+// IdHTTP1.HandleRedirects := True;
+// try
+// JSONString:=IdHTTP1.Get(GitURL);
+// JSONObject:=TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+// for JSONPair in JSONObject do
+// begin
+// if(JSONPair.JsonString.value='content') then
+// begin
+// NewLineChar:='\n';
+// EmptySpace:='';
+// content:=JSONPair.JsonValue.value;
+// //StringReplace(dt,'/','_',[rfReplaceAll, rfIgnoreCase])
+// content:=StringReplace(content,'/n','',[rfReplaceAll, rfIgnoreCase]);
+// content:=StringReplace(content,''#$A'','',[rfReplaceAll, rfIgnoreCase]);
+// Content:=base64tostring(content);
+// Result:=content;
+// end;
+// end;
+// except
+// on F: Exception do
+// begin
+// AppWriteLn('Error during HTTP request: ' + F.Message);
+// end;
+// end;
+// end;
+procedure FileStreamToStringStream(FileStream: TFileStream;
+  var StringStream: TStringStream);
+begin
+  // Reset the position of the file stream to the beginning
+  FileStream.Position := 0;
+  // Clear the existing content of the string stream
+  StringStream.Clear;
+  // Copy the content of the file stream to the string stream
+  StringStream.CopyFrom(FileStream, FileStream.Size);
+end;
+
+Function TImportStructures.ReadCompressFile(const FileName: string): String;
+var
+  FileStream: TFileStream;
+  DecompressedStream, CompressedStream: TStringStream;
+  DecompressionBuffer: TBytes;
+
+begin
+  Result := '';
+
+  try
+    // Open the file for reading
+    FileStream := TFileStream.Create(FileName, fmOpenRead);
+    try
+      // Create a string stream for the decompressed data
+      DecompressedStream := TStringStream.Create('' { , TEncoding.Unicode } );
+      //
+      CompressedStream := TStringStream.Create('' { , TEncoding.Unicode } );
+      try
+        FileStream.Position := 0;
+        FileStreamToStringStream(FileStream, CompressedStream);
+        CompressedStream.Position := 0;
+        // Decompress the data
+
+        // ZDecompressStream(FileStream, DecompressedStream);
+        with TCompress.Create do
+        begin
+          DecompressedStream := DecompressStream(CompressedStream, False);
+          destroy;
+        end;
+        DecompressedStream.Position := 0;
+        // Result := LoadXMLData(trim(DecompressedStream.DataString));
+        // Reset the position of the decompressed stream to the beginning
+        // DecompressedStream.Position := 0;
+
+        // Read the decompressed data from the stream
+        Result := DecompressedStream.DataString;
+      finally
+        // Free the decompressed stream
+        DecompressedStream.Free;
+      end;
+    finally
+      // Free the file stream
+      FileStream.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      ReadErrorList(E.Message);
+      // Handle any exceptions
+      Console_write('Error loading compressed Unicode file: ' + E.Message, 12);
+      Appwriteln;
+    end;
+  end;
+end;
+// var
+// StreamReader: TStreamReader;
+// FileStream: TFileStream;
+// Stream: TStringStream;
+/// /  EncryptedData: TBytes;
+// begin
+// // try
+// // Result := TStringStream.Create('', TEncoding.UTF8);
+// // StreamReader := TStreamReader.Create(FileName, TEncoding.UTF8);
+// // Result.WriteString(StreamReader.ReadToEnd);
+// //
+// // finally
+// // StreamReader.Free;
+// // end;
+//
+// FileStream := TFileStream.Create(FileName, fmOpenRead);
+// try
+// Stream := TStringStream.Create('');
+// try
+// // Read encrypted data from the file
+// Stream.CopyFrom(FileStream, FileStream.Size);
+// Result := Stream.DataString;
+// except
+// Stream.Free;
+// raise;
+// end;
+// finally
+// FileStream.Free;
+// end;
+// end;
+
+function DecryptImplementation(const CipherText: string): string;
+begin
+  Result := '';
+
+  try
+    writelog('DecryptImplementation started.');
+
+    // TODO:
+    // AES-256 CBC PKCS7 Decryption
+    // Key : AxiDataPackageAxpertExportImport
+    // IV  : AxiDataPackages1
+
+    Result := CipherText; // Temporary
+
+    writelog('DecryptImplementation completed.');
+  except
+    on E: Exception do
+    begin
+      writelog('DecryptImplementation Error : ' + E.Message);
+      raise;
+    end;
+  end;
+end;
+
+Function TImportStructures.ReadFile(FileName: String): String;
+var
+  XMLFile: TextFile;
+  Data: string;
+  FileContent: Tstringlist;
+  FileStream: TFileStream;
+  Buffer: TStringStream;
+
+  path: string;
+begin
+  try
+    writelog('ReadFile function started..');
+    if copy(ExtractFileName(FileName), 0, 3) = 'c__' then
+    begin
+      Result := ReadCompressFile(FileName);
+      // Continue;
+
+      // FileStream := TFileStream.Create(FileName, fmOpenRead);
+      // FileStream.POsition := 0;
+      // try
+      // Buffer := TStringStream.Create('');
+      // try
+      // Buffer.CopyFrom(FileStream, FileStream.Size);
+      // Buffer.Position := 0;
+      // Result := Buffer.DataString;
+      // finally
+      // Buffer.Free;
+      // end;
+      // finally
+      // FileStream.Free;
+      // end;
+    end
+    else
+    begin
+      FileContent := Tstringlist.Create;
+      try
+        FileContent.LoadFromFile(FileName);
+        Result := FileContent.Text;
+
+        // Decrypt Data Package (.axidata) files
+        if SameText(ExtractFileExt(FileName), '.axidata') then
+        begin
+          writelog('Decrypting axidata file : ' + ExtractFileName(FileName));
+          // Result := DecryptImplementation(Result);
+          writelog('axidata content : ' + Result);
+          Result := FileContent.Text;
+        end;
+      finally
+        FileContent.Free;
+      end;
+    end;
+    // stringList := Tstringlist.Create;
+    // StreamReader := TStreamReader.Create(FileName);
+    // while not StreamReader.EndOfStream do
+    // begin
+    // Data := StreamReader.ReadLine
+    // end;
+    // stringList.LoadFromFile(path);
+    // Data := stringList.Text;
+    // Result:= TFile.ReadAllText(FileName);
+    // Result := Data;
+    // AppWriteLn(XMLData);
+    // Exit;
+    // readln;
+    writelog('ReadFile function ends..');
+  except
+    on E: Exception do
+    begin
+      ReadErrorList(E.Message);
+      Console_write('Error: ' + E.Message, 12);
+      Appwriteln;
+      writelog('Error occured in ReadFile function : ' + E.Message);
+    end;
+
+  end;
+  // readln;
+
+  // finally
+  // StringList.Free;
+end;
+
+// AppWriteLn(XMLData);
+// Readln;
+
+// trnsid var
+// Function TImportStructures.ImportStructure(FileName: string): String;
+// var
+// sXML: string;
+// ext: string;
+// trans_id: string;
+// txtfile:textfile;
+// DestinationFile,dfilename:string;
+// begin
+// writelog('ImportStructure function started...');
+// FImportDiff.SelectedTStruct :=TStringList.Create;
+// FImportDiff.SelectedPage :=TStringList.Create;
+// FImportDiff.CreateLog := False;
+// FImportStructDef.CreateLog := False;
+// trans_id := ChangeFileExt(ExtractFileName(FileName), '');
+// ext := ExtractFileExt(FileName);
+// if LowerCase(ext) = '.trn' then // forms
+// begin
+// if copy(ExtractFileName(FileName), 0, 3) = 'c__' then
+// begin
+// trans_id := copy(trans_id, 4, length(trans_id));
+// FImportDiff.servicename:='WriteTStructDef';
+// sXML := DeCompressFile(FileName);
+// WriteTStructDef(trans_id, sXML);
+// end
+// // sXML := ReadFile(FileName);
+// // WriteTStructDef(trans_id, sXML);
+// else
+// begin
+// sXML := ReadFile(FileName);
+// writelog('Loaded XML Length for ' + FileName + ': ' + IntToStr(Length(sXML)));
+// FImportDiff.servicename:='WriteTStructDef';
+// WriteTStructDef(trans_id, sXML);
+// end;
+// end
+// else if LowerCase(ext) = '.ivw' then // iviews
+// begin
+// if copy(ExtractFileName(FileName), 0, 3) = 'c__' then
+// begin
+// trans_id := copy(trans_id, 4, length(trans_id));
+// sXML := DeCompressFile(FileName);
+// FImportDiff.servicename:='WriteIviewDef';
+/// /      WriteIviewDef(trans_id, 't', sXML);
+// WriteIviewDef(trans_id, 'f', sXML);
+// end
+// else
+// begin
+// sXML := ReadFile(FileName);
+// writelog('Loaded XML Length for ' + FileName + ': ' + IntToStr(Length(sXML)));
+// FImportDiff.servicename:='WriteIviewDef';
+/// /      WriteIviewDef(trans_id, 't', sXML);
+// WriteIviewDef(trans_id, 'f', sXML);
+// end;
+// //
+// // readln;
+// end
+// else
+// begin
+// if (copy(ExtractFileName(FileName), 0, 3) = 'c__')and (ext <> '.xml') then
+// begin
+// dfilename:= copy(extractfilename(FileName), 4, length(Filename));
+// trans_id := copy(trans_id, 4, length(trans_id));
+// sXML := DeCompressFile(FileName);
+// DestinationFile:=extractfilepath(FileName)+dfilename;
+// try
+// TFile.Copy(FileName, DestinationFile,True);
+// except on
+// E:Exception do
+// begin
+// AppWriteLn(E.message);
+// writelog('Error while Copying '+Extractfilename(FileName)+': '+E.message);
+// end;
+//
+// end;
+/// /      assignfile(txtfile,'D:\Axpert_Project\Axpert\AxPlugins\'+selectedplugin+'\Structures\'+trans_id+ext);
+/// /      rewrite(txtfile);
+/// /      AppWriteLn(txtfile,sXML);
+/// /      closefile(txtfile);
+// if (lowercase(ExtractFileExt(FileName)) = '.tab') and  (pos('ax_layoutdesign',lowercase(FileName)) > 0) then
+/// /      begin
+/// /  FImportDiff.Transid := <Extracted_Transid_from_ax_layourdesign>;
+/// /      end;
+// writelog('Importing :'+extractfilename(DestinationFile));
+// FImportDiff.StructureDiff(DestinationFile);
+// //  writelog('ImportStructure function started...');
+// end
+// else
+// begin
+// if ext <> '.xml' then
+// begin
+// sXML := DeCompressFile(FileName);
+// writelog('Importing :'+extractfilename(FileName));
+// FImportDiff.StructureDiff(FileName);
+//
+// end;
+// end;
+// end;
+// if LowerCase(ext) = '.axidata' then
+// begin
+// writelog ('Importing axidata json file');
+/// /    Readfile(Filename);
+// InstallDataJson(FileName);
+// end;
+//
+// writelog('ImportStructure function ends...');
+//
+// end;
+Function TImportStructures.ImportStructure(FileName: string): String;
+var
+  sXML: string;
+  ext: string;
+  trans_id: string;
+  txtfile: TextFile;
+  DestinationFile, dfilename: string;
+begin
+  writelog('ImportStructure function started...');
+  writelog('Input FileName : ' + FileName);
+
+  writelog('Creating SelectedTStruct...');
+  FImportDiff.SelectedTStruct := Tstringlist.Create;
+  writelog('SelectedTStruct created.');
+
+  writelog('Creating SelectedPage...');
+  FImportDiff.SelectedPage := Tstringlist.Create;
+  writelog('SelectedPage created.');
+
+  FImportDiff.CreateLog := False;
+  FImportStructDef.CreateLog := False;
+  writelog('CreateLog flags set to False.');
+
+  writelog('Getting trans_id...');
+  trans_id := ChangeFileExt(ExtractFileName(FileName), '');
+  writelog('trans_id : ' + trans_id);
+
+  writelog('Getting extension...');
+  ext := ExtractFileExt(FileName);
+  writelog('Extension : ' + ext);
+
+  if LowerCase(ext) = '.trn' then // forms
+  begin
+    writelog('Processing TRN file...');
+    if copy(ExtractFileName(FileName), 0, 3) = 'c__' then
+    begin
+      writelog('Compressed TRN detected.');
+
+      trans_id := copy(trans_id, 4, length(trans_id));
+      writelog('Modified trans_id : ' + trans_id);
+
+      FImportDiff.servicename := 'WriteTStructDef';
+      writelog('ServiceName : ' + FImportDiff.servicename);
+
+      writelog('Calling DeCompressFile...');
+      sXML := DeCompressFile(FileName);
+      writelog('DeCompressFile completed. XML Length : ' +
+        IntToStr(length(sXML)));
+
+      writelog('Calling WriteTStructDef...');
+      WriteTStructDef(trans_id, sXML);
+      writelog('WriteTStructDef completed.');
+    end
+    // sXML := ReadFile(FileName);
+    // WriteTStructDef(trans_id, sXML);
+    else
+    begin
+      writelog('Normal TRN detected.');
+
+      writelog('Calling ReadFile...');
+      sXML := ReadFile(FileName);
+      writelog('ReadFile completed.');
+      writelog('Loaded XML Length for ' + FileName + ': ' +
+        IntToStr(length(sXML)));
+
+      FImportDiff.servicename := 'WriteTStructDef';
+      writelog('ServiceName : ' + FImportDiff.servicename);
+
+      writelog('Calling WriteTStructDef...');
+      WriteTStructDef(trans_id, sXML);
+      writelog('WriteTStructDef completed.');
+    end;
+  end
+  else if LowerCase(ext) = '.ivw' then // iviews
+  begin
+    writelog('Processing IVW file...');
+
+    if copy(ExtractFileName(FileName), 0, 3) = 'c__' then
+    begin
+      writelog('Compressed IVW detected.');
+
+      trans_id := copy(trans_id, 4, length(trans_id));
+      writelog('Modified trans_id : ' + trans_id);
+
+      writelog('Calling DeCompressFile...');
+      sXML := DeCompressFile(FileName);
+      writelog('DeCompressFile completed. XML Length : ' +
+        IntToStr(length(sXML)));
+
+      FImportDiff.servicename := 'WriteIviewDef';
+      writelog('ServiceName : ' + FImportDiff.servicename);
+
+      // WriteIviewDef(trans_id, 't', sXML);
+
+      writelog('Calling WriteIviewDef...');
+      WriteIviewDef(trans_id, 'f', sXML);
+      writelog('WriteIviewDef completed.');
+    end
+    else
+    begin
+      writelog('Normal IVW detected.');
+
+      writelog('Calling ReadFile...');
+      sXML := ReadFile(FileName);
+      writelog('ReadFile completed.');
+      writelog('Loaded XML Length for ' + FileName + ': ' +
+        IntToStr(length(sXML)));
+
+      FImportDiff.servicename := 'WriteIviewDef';
+      writelog('ServiceName : ' + FImportDiff.servicename);
+
+      // WriteIviewDef(trans_id, 't', sXML);
+
+      writelog('Calling WriteIviewDef...');
+      WriteIviewDef(trans_id, 'f', sXML);
+      writelog('WriteIviewDef completed.');
+    end;
+    //
+    // readln;
+  end
+  else
+  begin
+    writelog('Processing Structure file...');
+
+    if (copy(ExtractFileName(FileName), 0, 3) = 'c__') and (ext <> '.xml') then
+    begin
+      writelog('Compressed structure file detected.');
+
+      dfilename := copy(ExtractFileName(FileName), 4, length(FileName));
+      writelog('dfilename : ' + dfilename);
+
+      trans_id := copy(trans_id, 4, length(trans_id));
+      writelog('Modified trans_id : ' + trans_id);
+
+      writelog('Calling DeCompressFile...');
+      sXML := DeCompressFile(FileName);
+      writelog('DeCompressFile completed. XML Length : ' +
+        IntToStr(length(sXML)));
+
+      DestinationFile := extractfilepath(FileName) + dfilename;
+      writelog('DestinationFile : ' + DestinationFile);
+
+      writelog('Calling TFile.Copy...');
+      try
+        TFile.copy(FileName, DestinationFile, True);
+        writelog('TFile.Copy completed.');
+      except
+        on E: Exception do
+        begin
+          Appwriteln(E.Message);
+          writelog('Error while Copying ' + ExtractFileName(FileName) + ': ' +
+            E.Message);
+        end;
+
+      end;
+
+      // assignfile(txtfile,'D:\Axpert_Project\Axpert\AxPlugins\'+selectedplugin+'\Structures\'+trans_id+ext);
+      // rewrite(txtfile);
+      // AppWriteLn(txtfile,sXML);
+      // closefile(txtfile);
+
+      if (LowerCase(ExtractFileExt(FileName)) = '.tab') and
+        (pos('ax_layoutdesign', LowerCase(FileName)) > 0) then
+        // begin
+        // FImportDiff.Transid := <Extracted_Transid_from_ax_layourdesign>;
+        // end;
+
+        writelog('Calling StructureDiff...');
+      writelog('Importing :' + ExtractFileName(DestinationFile));
+      FImportDiff.StructureDiff(DestinationFile);
+      writelog('StructureDiff completed.');
+
+      // writelog('ImportStructure function started...');
+    end
+    else
+    begin
+      if LowerCase(ext) = '.axidata' then
+      begin
+        writelog('Importing axidata json file');
+
+        // Readfile(Filename);
+
+        writelog('Calling InstallDataJson...');
+        InstallDataJson(FileName);
+        writelog('InstallDataJson completed.');
+      end
+      else if ext <> '.xml' then
+      begin
+        writelog('Calling DeCompressFile...');
+        sXML := DeCompressFile(FileName);
+        writelog('DeCompressFile completed. XML Length : ' +
+          IntToStr(length(sXML)));
+
+        writelog('Calling StructureDiff...');
+        writelog('Importing :' + ExtractFileName(FileName));
+        FImportDiff.StructureDiff(FileName);
+        writelog('StructureDiff completed.');
+
+      end;
+    end;
+  end;
+
+  // if LowerCase(ext) = '.axidata' then
+  // begin
+  // writelog ('Importing axidata json file');
+  //
+  /// /    Readfile(Filename);
+  //
+  // writelog('Calling InstallDataJson...');
+  // InstallDataJson(FileName);
+  // writelog('InstallDataJson completed.');
+  // end;
+
+  writelog('ImportStructure function ends...');
+end;
+
+Function TImportStructures.MakeValidXMLString(pXMLString: String): String;
+begin
+  try
+    pXMLString := trim(pXMLString);
+    if pos('\\r\\n', pXMLString) > 0 then
+      pXMLString := Axprovider.dbm.gf.FindAndReplace(pXMLString,
+        '\\r\\n', #$D#$A);
+    if pos('\\n', pXMLString) > 0 then
+      pXMLString := Axprovider.dbm.gf.FindAndReplace(pXMLString, '\\n', #$A);
+    if pos('\\r', pXMLString) > 0 then
+      pXMLString := Axprovider.dbm.gf.FindAndReplace(pXMLString, '\\r', #$D);
+    // Double slash not replaced back since it will be handled by .net json libraries automatically
+    // if pos('\\',pXMLString) > 0  then  pXMLString := axp.dbm.gf.FindAndReplace(pXMLString, '\\', '\');
+    if pos('^^dq', pXMLString) > 0 then
+      pXMLString := Axprovider.dbm.gf.FindAndReplace(pXMLString, '^^dq', '"');
+    // if pos('\"',pXMLString) > 0  then  pXMLString := axp.dbm.gf.FindAndReplace(pXMLString, '\"', '"');
+    // if pos('¿',pXMLString) > 0  then  pXMLString := axp.dbm.gf.FindAndReplace(pXMLString, '¿', '"');
+    // if pos('''',pXMLString) > 0  then  pXMLString := axp.dbm.gf.FindAndReplace(pXMLString, '''','\''');
+  finally
+    Result := pXMLString;
+  end;
+end;
+
+Function TImportStructures.WriteIviewDef(Fname, sDefaultPage,
+  sStructXML: String): String;
+var
+  vst: TCreateIviewStructure;
+  fxml: IXMLDocument;
+  tmnode, enode, defpageNode: IXMLNode;
+  layout: string;
+begin
+  try
+
+    // AppWriteLn(Fname+'.ivw Structure Importing...');
+    Result := '';
+    vst := nil;
+    writelog('CreateIviewStruct Started');
+    vst := TCreateIviewStructure.Create(Axprovider);
+    writelog('CreateIviewStruct Ends');
+    vst.servicename := 'WriteIviewDef'; // 'CreateStruct_dwb';
+    vst.TblPrefix := 'dwb_';
+    writelog('LoadXmlData Started');
+    writelog('XML Data : ' + sStructXML);
+    fxml := LoadXMLData(sStructXML);
+    writelog('LoadXmlData Ends');
+    enode := fxml.DocumentElement;
+    tmnode := nil;
+    layout := 'default';
+
+    tmnode := enode.ChildNodes.FindNode('temp'); { AddChild('temp'); }
+    if tmnode = nil then
+    begin
+      tmnode := enode.AddChild('temp');
+    end;
+    defpageNode := tmnode.ChildNodes.FindNode('defpage');
+    if defpageNode = nil then
+      tmnode.AddChild('defpage').NodeValue := 'f'
+    else // The following may not be required as if it already exisits in structure xml
+    begin
+      if LowerCase(defpageNode.NodeValue) = 't' then
+        tmnode.AddChild('defpage').NodeValue := 't'
+      else
+        tmnode.AddChild('defpage').NodeValue := 'f';
+    end;
+
+    // tmnode.AddChild('defpage').NodeValue := 'false';
+    sStructXML := fxml.xml.Text;
+    sStructXML := MakeValidXMLString(sStructXML);
+
+    writelog('CreateStructure IviewDef Started');
+    vst.WriteIviewDef(Fname, sDefaultPage, sStructXML);
+    writelog('CreateStructure IviewDef Ends');
+
+    if vst.errormsg = '' then
+    begin
+
+      Appwrite('   - ');
+      Console_write(Fname + '.ivw ', 10);
+      Appwrite('Structure imported Successfully...!');
+      Appwriteln;
+      AxStructures.Add(Fname + '.ivw');
+
+    end
+    else
+    begin
+      Appwriteln(vst.errormsg);
+      writelog('CreateStructure IviewDef Errmsg : ' + vst.errormsg);
+      raise Exception.Create(vst.errormsg);
+    end;
+  finally
+    tmnode := nil;
+    if assigned(vst) then
+    begin
+      FreeAndNil(vst);
+    end;
+  end;
+end;
+
+// Function TImportStructures.WriteTStructDef(FileName: string;
+// sXML: String): String;
+// var
+// sf: TCreateStructure;
+// begin
+// try
+// // AppWriteLn(FileName+'.trn  Structure Importing...');
+// Result := '';
+// sf := nil;
+// sf := TCreateStructure.Create(axprovider);
+//
+// sXML := MakeValidXMLString(sXML);
+//
+// // Call function UpdateStructXML
+// sXML := UpdateStructXML(sXML);
+//
+// sf.servicename := 'WriteTStructDef';
+// sf.Fname := FileName;
+//
+// sf.WriteTStructDef(FileName, sXML);
+//
+// if sf.errormsg = '' then
+// begin
+// AppWriteLn('   - ');
+// Console_write(FileName + '.trn ', 10);
+// AppWriteLn('Structure imported Successfully...!');
+// AxStructures.Add(FileName + '.trn');
+// writeln;
+//
+// end
+// else
+// begin
+//
+// AppWriteLn(sf.errormsg);
+// raise Exception.Create(sf.errormsg);
+// end;
+//
+// finally
+// if assigned(sf) then
+// begin
+// FreeAndNil(sf);
+// end;
+// end;
+//
+// end;
+
+Function TImportStructures.WriteTStructDef(FileName: string;
+  sXML: String): String;
+var
+  sf: TCreateStructure;
+begin
+  writelog('WriteTStructDef function started...');
+  writelog('FileName : ' + FileName);
+  writelog('Input XML Length : ' + IntToStr(length(sXML)));
+
+  try
+    // AppWriteLn(FileName+'.trn  Structure Importing...');
+    Result := '';
+
+    writelog('Initializing TCreateStructure object...');
+    sf := nil;
+    sf := TCreateStructure.Create(Axprovider);
+    writelog('TCreateStructure object created.');
+
+    writelog('Calling MakeValidXMLString...');
+    sXML := MakeValidXMLString(sXML);
+    writelog('MakeValidXMLString completed.');
+    writelog('XML Length after MakeValidXMLString : ' + IntToStr(length(sXML)));
+
+    // Call function UpdateStructXML
+
+    writelog('Calling UpdateStructXML...');
+    sXML := UpdateStructXML(sXML);
+    writelog('UpdateStructXML completed.');
+    writelog('XML Length after UpdateStructXML : ' + IntToStr(length(sXML)));
+
+    sf.servicename := 'WriteTStructDef';
+    writelog('ServiceName : ' + sf.servicename);
+
+    sf.Fname := FileName;
+    writelog('sf.Fname : ' + sf.Fname);
+
+    writelog('Calling sf.WriteTStructDef...');
+
+    try
+      sf.bSkipExistingStructureImport := True;
+      sf.WriteTStructDef(FileName, sXML);
+    except
+      on E: Exception do
+      begin
+        writelog('WriteTStruct Def Exception : ' + E.Message);
+        raise;
+      end
+    end;
+    writelog('sf.WriteTStructDef completed.');
+
+    writelog('sf.errormsg : ' + sf.errormsg);
+
+    if sf.errormsg = '' then
+    begin
+      writelog('Structure imported successfully.');
+
+      Appwrite('   - ');
+      Console_write(FileName + '.trn ', 10);
+      writelog('FileName adding .trn : ' + FileName);
+      Appwrite('Structure imported Successfully...!');
+      Appwriteln;
+      writelog('Adding structure to AxStructures...');
+      AxStructures.Add(FileName + '.trn');
+      writelog('Added to AxStructures.');
+//      Appwriteln;
+
+    end
+    else
+    begin
+      writelog('Error occurred : ' + sf.errormsg);
+
+      Appwriteln(sf.errormsg);
+      raise Exception.Create(sf.errormsg);
+    end;
+
+  finally
+    writelog('Entering finally block.');
+
+    if assigned(sf) then
+    begin
+      sf.bSkipExistingStructureImport := False;
+      writelog('Freeing TCreateStructure object...');
+      FreeAndNil(sf);
+      writelog('TCreateStructure object freed.');
+    end;
+
+    writelog('WriteTStructDef function ended.');
+  end;
+
+end;
+
+Function TImportStructures.UpdateStructXML(structxml: string): string;
+var
+  fxml: IXMLDocument;
+  enode, tmnode, inode: IXMLNode;
+  layout: string;
+begin
+  try
+    fxml := LoadXMLData(structxml);
+    enode := fxml.DocumentElement;
+    tmnode := nil;
+    layout := 'default'; // Layout can be read from xml and set if required
+
+    // Add tempnode (ref from  uCreateStructure->ReadStructDef)
+    tmnode := enode.AddChild('temp');
+    // By default setting defpage to true | this needs to be handled based page visiblity
+    if enode.HasAttribute('defpage') then
+    begin
+      if LowerCase(vartostr(enode.Attributes['defpage'])) = 'y' then
+        tmnode.AddChild('defpage').NodeValue := 'true'
+      else
+        tmnode.AddChild('defpage').NodeValue := 'false';
+    end
+    else
+      tmnode.AddChild('defpage').NodeValue := 'false';
+    tmnode.AddChild('layout').NodeValue := layout;
+
+    // Currently hardcoding the value but it has to fetched from the strcut xml
+    tmnode.AddChild('listview').NodeValue := 'true';
+    // Clearing iframaes child nodes , since it will be recreated when saving / importing the structure
+    // ref uImportStructdef-CreateTStruct
+    // Load ifrmaes
+    inode := enode.ChildNodes.FindNode('iframes');
+    // if iframes node not available then create iframes node
+    if Not assigned(inode) then
+    begin
+      // Create ifrmaes
+      inode := enode.AddChild('iframes');
+      inode.Attributes['cat'] := 'iframes';
+      inode.Attributes['layout'] := 'default';
+    end
+    else
+      inode.ChildNodes.Clear; // Clear child nodes
+
+    Result := fxml.xml.Text;
+  finally
+    fxml := nil;
+    enode := nil;
+    tmnode := nil;
+    inode := nil;
+  end;
+end;
+
+Function TImportStructures.DeCompressFile(pCompressedFile: String): String;
+var
+  sDecompressedFile: String;
+begin
+  Result := '';
+  if pCompressedFile = '' then
+    Exit;
+  with TCompress.Create do
+  begin
+    sDecompressedFile := ChangeFileExt(pCompressedFile, '.xml');
+    DeCompressFile(pCompressedFile, sDecompressedFile);
+    With Tstringlist.Create do
+    begin
+      LoadFromFile(sDecompressedFile);
+      Result := Text;
+      Free;
+    end;
+    destroy;
+  end;
+end;
+
+Function TImportStructures.DecompressXMLContent(pFilename: String)
+  : IXMLDocument;
+var
+  stm, cstm: TStringStream;
+  s: string;
+begin
+  stm := nil;
+  cstm := nil;
+  try
+    s := ReadFile(pFilename);
+    // AppWriteLn(s);
+    // s := StringReplace(s, #0, ' ', [rfReplaceAll]);
+    // AppWriteLn(s);
+    stm := TStringStream.Create(s);
+    // here load the content of a file into a TStringStream(stm),
+    // stm:= ReadFile(pFilename);
+    if stm.Size = 0 then
+      Result := LoadXMLData('<root/>')
+    else
+    begin
+      cstm := TStringStream.Create('');
+      stm.Position := 0;
+      // with TCompress.Create do
+      // begin
+      // cstm := DecompressStream(stm);
+      // destroy;
+      // end;
+      // cstm.Position := 0;
+      // Result := LoadXMLData(trim(cstm.DataString));
+      FreeAndNil(cstm);
+    end;
+  finally
+    if assigned(stm) then
+      FreeAndNil(stm);
+    if assigned(cstm) then
+      FreeAndNil(cstm);
+  end;
+
+end;
+
+Function TImportStructures.GetUserPassword: String;
+var
+  x1: Txds;
+  Errorstr: String;
+begin
+  Result := '';
+  x1 := Axprovider.dbm.GetXDS(nil);
+  x1.buffered := True;
+  try
+    Errorstr := '';
+    x1.CDS.CommandText :=
+      'Select password From axusers where username = :uname';
+    x1.CDS.Params.ParamValues['uname'] := Axprovider.dbm.gf.username;
+    x1.open;
+    if x1.CDS.Recordcount > 0 then
+      Result := x1.CDS.FieldByName('password').AsString;
+  Except
+    on E: Exception do
+      Errorstr := E.Message;
+  end;
+  if Errorstr <> '' then
+  begin
+    Axprovider.dbm.gf.DoDebug.Msg('Error in GetUserPassword :' + Errorstr);
+  end;
+  x1.close;
+  if assigned(x1) then
+    FreeAndNil(x1);
+end;
+
+function MD5WithSeed(const InputValue, RandomSeed: string): string;
+var
+  MD5: TIdHashMessageDigest5;
+  CombinedValue: string;
+begin
+  CombinedValue := RandomSeed + InputValue;
+
+  MD5 := TIdHashMessageDigest5.Create;
+  try
+    Result := LowerCase(MD5.HashStringAsHex(CombinedValue,
+      IndyTextEncoding_UTF8));
+  finally
+    MD5.Free;
+  end;
+end;
+
+function GenerateRandomSeed: string;
+begin
+  Result := IntToStr(100000 + Random(900000));
+end;
+
+function TImportStructures.PrepareSignInRequest: string;
+var
+  JSONObject: TJSONObject;
+  userpwd, userpwdhash, seed: String;
+begin
+  writelog('PrepareSignInRequest started.');
+
+  JSONObject := TJSONObject.Create;
+  try
+    try
+      JSONObject.AddPair('appname', ProjectName);
+      JSONObject.AddPair('UserName', dbm.gf.username);
+      userpwd := GetUserPassword;
+      seed := GenerateRandomSeed;
+      userpwdhash := MD5WithSeed(userpwd, seed);
+      JSONObject.AddPair('password', userpwdhash);
+      JSONObject.AddPair('Language', 'English');
+      JSONObject.AddPair('SessionId', dbm.gf.SessionId);
+      JSONObject.AddPair('seed', seed);
+
+{$IF CompilerVersion > 24.0}
+      JSONObject.AddPair('Globalvars', 'true');
+      JSONObject.AddPair('ClearPreviousSession', 'true');
+      JSONObject.AddPair('trace', 'true');
+{$ELSE}
+      JSONObject.AddPair('Globalvars', TJSONTrue.Create);
+      JSONObject.AddPair('ClearPreviousSession', TJSONTrue.Create);
+      JSONObject.AddPair('trace', TJSONTrue.Create);
+{$IFEND}
+      Result := JSONObject.ToString;
+
+      writelog('SignIn Request : ' + Result);
+    except
+      on E: Exception do
+      begin
+        writelog('PrepareSignInRequest failed : ' + E.Message);
+        raise;
+      end;
+    end;
+  finally
+    JSONObject.Free;
+  end;
+
+  writelog('PrepareSignInRequest completed.');
+end;
+
+procedure ParseSignInResponse(const Response: string; out ARMSessionId: string;
+  out Token: string);
+var
+  RootObj: TJSONObject;
+  ResultObj: TJSONObject;
+  JsonText: string;
+begin
+  ARMSessionId := '';
+  Token := '';
+  writelog('ParseSignInResponse function started...');
+  JsonText := Response;
+  JsonText := StringReplace(JsonText, '\"', '"', [rfReplaceAll]);
+  JsonText := StringReplace(JsonText, '\\', '\', [rfReplaceAll]);
+
+  if (length(JsonText) >= 2) and (JsonText[1] = '"') and
+    (JsonText[length(JsonText)] = '"') then
+    JsonText := copy(JsonText, 2, length(JsonText) - 2);
+
+  writelog('Parsed SignIn JSON : ' + JsonText);
+  RootObj := TJSONObject.ParseJSONValue(JsonText) as TJSONObject;
+  if RootObj = nil then
+    raise Exception.Create('Invalid SignIn response.');
+
+  try
+    if RootObj.Get('result') = nil then
+      raise Exception.Create
+        ('Invalid SignIn response. "result" node not found.');
+    ResultObj := RootObj.Get('result').JsonValue as TJSONObject;
+
+    if ResultObj.Get('ARMSessionId') = nil then
+      raise Exception.Create('ARMSessionId not found.');
+    if ResultObj.Get('token') = nil then
+      raise Exception.Create('Token not found.');
+
+    ARMSessionId := ResultObj.Get('ARMSessionId').JsonValue.Value;
+    Token := ResultObj.Get('token').JsonValue.Value;
+
+    writelog('Authentication response parsed successfully.');
+    writelog('ARMSessionId : ' + ARMSessionId);
+    writelog('Token extracted successfully.');
+    writelog('ParseSignInResponse completed.');
+  finally
+    FreeAndNil(RootObj);
+  end;
+  writelog('ParseSignInResponse function ends...');
+end;
+
+procedure TImportStructures.DoSignIn(const SignInURL: string;
+  out ARMSessionId: string; out Token: string);
+var
+  HTTP: TIdHTTP;
+  SSLIOHandler: TIdSSLIOHandlerSocketOpenSSL;
+  RequestStream: TStringStream;
+  ResponseStream: TStringStream;
+  SignInRequest: string;
+  Response: string;
+begin
+  writelog('DoSignIn function started...');
+  ARMSessionId := '';
+  Token := '';
+  HTTP := nil;
+  SSLIOHandler := nil;
+  RequestStream := nil;
+  ResponseStream := nil;
+  try
+    HTTP := TIdHTTP.Create(nil);
+    SSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(nil);
+    SSLIOHandler.SSLOptions.Method := sslvTLSv1_2;
+    SSLIOHandler.SSLOptions.SSLVersions := [sslvTLSv1_2];
+    HTTP.IOHandler := SSLIOHandler;
+    HTTP.HandleRedirects := True;
+    HTTP.RedirectMaximum := 15;
+    HTTP.HTTPOptions := [hoForceEncodeParams];
+    HTTP.ProtocolVersion := pv1_1;
+    HTTP.Request.CharSet := 'utf-8';
+    HTTP.Request.CacheControl := 'no-cache';
+    HTTP.Request.Accept := 'application/json';
+    HTTP.Request.ContentType := 'application/json';
+    HTTP.Request.UserAgent := 'Axpert';
+
+    SignInRequest := PrepareSignInRequest;
+    writelog('Calling SignIn URL : ' + SignInURL);
+//    writelog('SignIn Request : ' + SignInRequest);
+    RequestStream := TStringStream.Create(SignInRequest, TEncoding.UTF8);
+    ResponseStream := TStringStream.Create('', TEncoding.UTF8);
+
+    writelog('Calling ARM SignIn API...');
+    writelog('URL : ' + SignInURL);
+    try
+      HTTP.Post(SignInURL, RequestStream, ResponseStream);
+
+      writelog('ARM SignIn API completed.');
+      writelog('HTTP Status : ' + IntToStr(HTTP.ResponseCode));
+      writelog('HTTP Description : ' + HTTP.ResponseText);
+
+      Response := ResponseStream.DataString;
+      writelog('SignIn Response : ' + Response);
+
+      if pos('\"success\":false', LowerCase(Response)) > 0 then
+      begin
+        raise Exception.Create(Response);
+      end;
+    except
+      on E: Exception do
+      begin
+        writelog('ARM SignIn API failed.');
+        raise;
+      end;
+    end;
+    ParseSignInResponse(Response, ARMSessionId, Token);
+
+    if (trim(ARMSessionId) = '') or (trim(Token) = '') then
+      raise Exception.Create('Authentication failed.');
+
+    writelog('Authentication completed successfully.');
+  finally
+    if assigned(RequestStream) then
+      FreeAndNil(RequestStream);
+    if assigned(ResponseStream) then
+      FreeAndNil(ResponseStream);
+    if assigned(HTTP) then
+      FreeAndNil(HTTP);
+  end;
+  writelog('DoSignIn function ends...');
+end;
+
+function RemoveSkippedMasterObjects(AxPutPayloadObj: TJSONObject): TJSONObject;
+var
+  DataArray: TJSONArray;
+  DataObj: TJSONObject;
+  MasterObjectValue: String;
+  I: Integer;
+begin
+  Result := AxPutPayloadObj;
+
+  writelog('RemoveSkippedMasterObjects started.');
+
+  if not assigned(AxPutPayloadObj) then
+  begin
+    writelog('AxPutPayloadObj is nil. Nothing to process.');
+    Exit;
+  end;
+
+  if AxPutPayloadObj.Get('data') = nil then
+  begin
+    writelog('"data" node not found in AxPut payload.');
+    Exit;
+  end;
+
+  DataArray := AxPutPayloadObj.Get('data').JsonValue as TJSONArray;
+
+  if not assigned(DataArray) then
+  begin
+    writelog('"data" node is not a JSON array.');
+    Exit;
+  end;
+
+  writelog('Processing AxPut data array. Count : ' + IntToStr(DataArray.Size));
+
+  // Loop backwards because complete objects may be removed.
+  for I := DataArray.Size - 1 downto 0 do
+  begin
+    DataObj := DataArray.Get(I) as TJSONObject;
+
+    if not assigned(DataObj) then
+      Continue;
+
+    // Check for our internal masterObject key
+    if DataObj.Get('masterObject') <> nil then
+    begin
+      MasterObjectValue := DataObj.Get('masterObject').JsonValue.Value;
+
+      writelog('masterObject found at data index ' + IntToStr(I) + ' : ' +
+        MasterObjectValue);
+
+      // Check whether this master transid was skipped
+      if SkippedTransIdsList.IndexOf(MasterObjectValue) <> -1 then
+      begin
+        writelog('masterObject "' + MasterObjectValue +
+          '" FOUND in SkippedTransIdsList.');
+
+        writelog('Removing ENTIRE data object from AxPut payload. ' + 'Index : '
+          + IntToStr(I));
+
+        DataArray.Remove(I);
+
+        writelog('Entire data object removed for masterObject : ' +
+          MasterObjectValue);
+      end
+      else
+      begin
+        writelog('masterObject "' + MasterObjectValue +
+          '" NOT FOUND in SkippedTransIdsList.');
+
+        writelog('Keeping data object but removing internal ' +
+          '"masterObject" key.');
+
+        DataObj.RemovePair('masterObject');
+
+        writelog('"masterObject" removed from data object : ' +
+          MasterObjectValue);
+      end;
+    end
+    else
+    begin
+      writelog('No masterObject found at data index ' + IntToStr(I) +
+        '. Keeping data object.');
+    end;
+  end;
+
+  writelog('RemoveSkippedMasterObjects completed. ' + 'Final data count : ' +
+    IntToStr(DataArray.Size));
+end;
+
+function hasValidAxPutRequest(
+  const RequestObj: TJSONObject): boolean;
+var 
+  DataArray : TJSONArray;
+begin
+    Result := False;
+    writelog('AxPut request payload generated successfully.');
+    writelog('Checking whether data array contains records.');
+
+    try
+      if not Assigned(RequestObj) then
+       begin
+        writelog('AxPut request JSON could not be parsed. Exiting DoAxPut.');
+        Exit;
+       end;
+
+    if RequestObj.Get('data') = nil then
+    begin
+      writelog('"data" array is not present in AxPut request. Nothing to submit.');
+      Exit;
+    end;
+
+    DataArray := RequestObj.Get('data').JsonValue as TJSONArray;
+
+    if (not assigned(DataArray)) or (DataArray.Size = 0) then
+    begin
+      writelog('AxPut data array is empty after removing skipped masterObjects. '
+        + 'No data to submit. Exiting DoAxPut.');
+      Exit;
+    end;
+
+    writelog('AxPut data array contains ' + IntToStr(DataArray.Size) +
+      ' object(s). Proceeding with AxPut.');
+
+    Result := True;
+
+  finally
+    // RequestObj.Free;
+  end;
+end;
+
+function NormalizeJsonString(const JsonText: string): string;
+begin
+  Result := JsonText;
+
+  // Convert escaped line breaks to spaces
+  Result := StringReplace(Result,'\r\n',' ',[rfReplaceAll]);
+
+  // Temporarily protect escaped double quotes
+  Result := StringReplace(Result,'\"','#dq#',[rfReplaceAll]);
+
+  // Escape backslashes
+  Result := StringReplace(Result,'\','\\',[rfReplaceAll]);
+
+  // Restore escaped double quotes
+  Result := StringReplace(Result,'#dq#','\"',[rfReplaceAll]);
+end;
+
+function BuildAxPutRequest(
+  const AxDataJson: string;
+  const ARMSessionId: string;
+  var bCanContinue: Boolean ): string;
+var
+  RootObj: TJSONObject;
+  ResultPayloadObj: TJSONObject;
+  AxPutPayloadObj: TJSONObject;
+  AxPutJsonRequest: string;
+begin
+  Result := '';
+  RootObj := nil;
+  bCanContinue := false;
+
+  writelog('BuildAxPutRequest function started...');
+
+  try
+    writelog('Parsing AxiData package JSON.');
+
+    AxPutJsonRequest := NormalizeJsonString(AxDataJson);
+    // Need to check this   | handling \" and \
+//    AxPutJsonRequest := StringReplace(AxPutJsonRequest, '\r\n', ' ', [rfReplaceAll]);
+//    AxPutJsonRequest := StringReplace(AxPutJsonRequest, '\"', '#dq#', [rfReplaceAll]);
+//    AxPutJsonRequest := StringReplace(AxPutJsonRequest, '\', '\\', [rfReplaceAll]);
+//    AxPutJsonRequest := StringReplace(AxPutJsonRequest, '#dq#', '\"', [rfReplaceAll]);
+
+//    writelog('AxiData JSON '+AxDataJson);
+    RootObj := TJSONObject.ParseJSONValue(AxPutJsonRequest) as TJSONObject;
+
+    if RootObj = nil then
+      raise Exception.Create('Invalid AxiData package JSON.');
+
+    writelog('AxiData JSON parsed successfully.');
+
+    if RootObj.Get('resultpayload') = nil then
+      raise Exception.Create('"resultpayload" node not found.');
+
+    ResultPayloadObj := RootObj.Get('resultpayload').JsonValue as TJSONObject;
+
+    if ResultPayloadObj.Get('axputpayloads') = nil then
+      raise Exception.Create('"axputpayloads" node not found.');
+
+    AxPutPayloadObj := ResultPayloadObj.Get('axputpayloads').JsonValue as TJSONObject;
+
+//    if AxPutPayloadObj.Get('ARMSessionId') <> nil then
+//      AxPutPayloadObj.RemovePair('ARMSessionId');
+//
+//    AxPutPayloadObj.AddPair('ARMSessionId', ARMSessionId);
+
+    AxPutPayloadObj := RemoveSkippedMasterObjects(AxPutPayloadObj);
+
+    writelog('AxPut master object remove is success next we need to verify the payload');
+
+    if hasValidAxPutRequest(AxPutPayloadObj) then
+    begin
+      Result := AxPutPayloadObj.ToString;
+      bCanContinue := True;
+
+      writelog('AxPut request JSON prepared successfully.');
+      writelog(Result);
+    end
+    else
+    begin
+      writelog('Not a Valid AxPutRequest Payload');
+    end;
+
+    RootObj.Free;
+    RootObj := nil;
+
+  except
+    on E: Exception do
+    begin
+      if assigned(RootObj) then
+        RootObj.Free;
+
+      writelog('BuildAxPutRequest failed.');
+      writelog('Reason : ' + E.Message);
+      raise;
+    end;
+  end;
+  writelog('BuildAxPutRequest function completed.');
+end;
+
+procedure DoAxPut(
+  const AxPutURL: string;
+  const AxPutRequest: string;
+  const ARMSessionId: string;
+  const Token: string);
+var
+  HTTP: TIdHTTP;
+  SSLIOHandler: TIdSSLIOHandlerSocketOpenSSL;
+  RequestStream: TStringStream;
+  ResponseStream: TStringStream;
+  RequestJSON: string;
+  RequestObj: TJSONObject;
+  DataArray: TJSONArray;
+begin
+  HTTP := nil;
+  SSLIOHandler := nil;
+  RequestStream := nil;
+  ResponseStream := nil;
+  writelog('DoAxPut function started...');
+  try
+    writelog('Creating HTTP client.');
+    HTTP := TIdHTTP.Create(nil);
+    SSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(nil);
+    SSLIOHandler.SSLOptions.Method := sslvTLSv1_2;
+    SSLIOHandler.SSLOptions.SSLVersions := [sslvTLSv1_2];
+    HTTP.IOHandler := SSLIOHandler;
+    HTTP.HandleRedirects := True;
+    HTTP.RedirectMaximum := 15;
+    HTTP.HTTPOptions := [hoForceEncodeParams];
+    HTTP.ProtocolVersion := pv1_1;
+    HTTP.Request.CharSet := 'utf-8';
+    HTTP.Request.CacheControl := 'no-cache';
+    HTTP.Request.Accept := 'application/json';
+    HTTP.Request.ContentType := 'application/json';
+    HTTP.Request.UserAgent := 'Axpert';
+    HTTP.Request.CustomHeaders.Clear;
+    HTTP.Request.CustomHeaders.AddValue('Authorization', 'Bearer ' + Token);
+
+    //RequestJSON := BuildAxPutRequest(AxPutRequest, ARMSessionId);
+
+    RequestJSON := AxPutRequest;
+    RequestStream := TStringStream.Create(RequestJSON, TEncoding.UTF8);
+    ResponseStream := TStringStream.Create('', TEncoding.UTF8);
+
+    try
+      writelog('Sending AxPut Request...');
+      HTTP.Post(AxPutURL, RequestStream, ResponseStream);
+      WriteLog('AxPut HTTP Status: ' +
+        IntToStr(HTTP.ResponseCode) + ' ' + HTTP.ResponseText);
+      writelog('AxPut Response: ' + ResponseStream.DataString);
+    except
+      on E: EIdHTTPProtocolException do
+      begin
+        writelog('ARM AxPut API failed.');
+        writelog('HTTP Status Code: ' + IntToStr(E.ErrorCode));
+        writelog('HTTP Status: ' + E.Message);
+
+        // Actual API validation-error response body
+        if E.ErrorMessage <> '' then
+          writelog('API Error Response: ' + E.ErrorMessage)
+        else if ResponseStream.DataString <> '' then
+          writelog('API Error Response: ' + ResponseStream.DataString)
+        else
+          writelog('API returned no error-response body.');
+
+        raise;
+      end;
+
+      on E: Exception do
+      begin
+        // Network errors, SSL errors, timeout, connection reset, etc.
+        writelog('ARM AxPut request failed.');
+        writelog('Exception Class: ' + E.ClassName);
+        writelog('Error: ' + E.Message);
+        raise;
+      end;
+    end;
+  finally
+    if Assigned(RequestStream) then FreeAndNil(RequestStream);
+    if Assigned(ResponseStream) then FreeAndNil(ResponseStream);
+    if Assigned(HTTP) then FreeAndNil(HTTP);
+  end;
+  writelog('DoAxPut function ends...');
+end;
+
+function TImportStructures.InstallDataJson(ADataJsonFile: string): Boolean;
+var
+  AxPutRequest: string;
+  // SignInURL: string;
+  // AxPutURL: string;
+  ARMSessionId: string;
+  Token: string;
+  FileName: string;
+  bCanContinue: Boolean;
+  AxPutPayloadObj :TJSONObject;
+begin
+  Result := False;
+  writelog('InstallDataJson function started.');
+  try
+    FileName := ExtractFileName(ADataJsonFile);
+    writelog('Processing AxiData Package : ' + FileName);
+    Console_write('   - Processing AxiData Json File ' + FileName + '.', 10);
+    Appwriteln;
+
+    writelog('Reading AxiData package.');
+    AxPutRequest := ReadFile(ADataJsonFile);
+    writelog('AxiData package loaded successfully.');
+
+    // hardcoded for now, need to enhance to be read from appsettings
+    // SignInURL := 'https://agileqa.agilecloud.biz/armnew/api/v1/Signin';
+    // AxPutURL := 'https://agileqa.agilecloud.biz/armnew/api/v1/AxPut';
+    if ArmSignInUrl = '' then
+      raise Exception.Create('ARM SignIn Url is Empty');
+
+    if ArmAxPutUrl = '' then
+      raise Exception.Create('ARM AxPut Url is Empty');
+
+    bCanContinue := false;
+    AxPutRequest := BuildAxPutRequest(AxPutRequest, ARMSessionId, bCanContinue);
+
+    writelog('AxPut request payload build completed successfully.');
+    writelog('AxPut Request: ' + AxPutRequest);
+
+    if bCanContinue then
+    begin
+      writelog('AxPut Payload releated internal verification is sucess so proceeding with SignIn');
+      writelog('Authenticating with ARM.');
+      DoSignIn(ArmSignInUrl, ARMSessionId, Token);
+      writelog('Authentication completed successfully.');
+
+       // Normalize AxPut JSON before converting it to TJSONObject
+      writelog('Normalizing AxPut request JSON before parsing.');
+      AxPutRequest := NormalizeJsonString(AxPutRequest);
+
+      writelog('Converting AxPut request string to JSON.');
+      AxPutPayloadObj := TJSONObject.ParseJSONValue(AxPutRequest) as TJSONObject;
+      try
+        if AxPutPayloadObj.Get('ARMSessionId') <> nil then
+          AxPutPayloadObj.RemovePair('ARMSessionId');
+
+        AxPutPayloadObj.AddPair('ARMSessionId', ARMSessionId);
+
+        AxPutRequest := AxPutPayloadObj.ToString;
+
+        writelog('Updated AxPut payload with ARMSessionId received from SignIn API.');
+        writelog('Updated AxPut Request: ' + AxPutRequest);
+
+      finally
+        AxPutPayloadObj.Free;
+      end;
+
+      writelog('Submitting package to AxPut API.');
+      DoAxPut(ArmAxPutUrl, AxPutRequest, ARMSessionId, Token);
+      writelog('Package imported successfully.');
+      Result := True;
+
+      Console_write('   - AxiData Json File ' + FileName +' imported successfully.', 10);
+      AppWriteln;
+    end
+    else
+    begin
+       writelog('Sign-In and AxPut API calls skipped because the processed payload contains no valid data.');
+    end;
+  except
+    on E: Exception do
+    begin
+      Result := False;
+      InstallErrMsg := ' InstallDataJson failed ' + E.Message;
+      writelog('InstallDataJson failed.');
+      writelog('Error : ' + E.Message);
+      ReadErrorList(E.Message);
+      Console_write('Error : ' + E.Message, 12);
+      Appwriteln;
+      raise;
+    end;
+  end;
+  writelog('InstallDataJson function ends...');
+end;
+
+end.

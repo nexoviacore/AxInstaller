@@ -1,0 +1,1597 @@
+unit uAPILoggingImpl;
+
+{Copied from \Axpert9-XE3\Ver 11.3\AsbCommonObjs}
+interface
+
+uses
+  Classes, SysUtils, StrUtils, DateUtils, Web.HTTPApp, uAPILogging, IdStack,
+  Windows, IdHTTP, IdGlobalProtocols, IdGlobal, IdURI, uDBManager, uXDS,
+{$IFDEF VER240} DBXJSON {$ELSE} JSON {$ENDIF};
+(*
+Note :
+Handling JSON based on compiler versions may not be required if we use Delphi XE3 code,
+as it will work with the latest code as well.
+However, we have implemented some code using compiler directives.
+This was done to accommodate both types of code, but there is no specific intention behind it.
+*)
+
+var
+  slWebRequest: TStringList;
+
+type
+  TAPILoggingHandler = class(TInterfacedObject, IWebAPILogHandler)
+    procedure LogRequest(Request: TWebRequest; Response: TWebResponse);
+    procedure SaveRequestToDatabase(dbm: TDBManager);
+    procedure SaveResponseToDatabase(dbm: TDBManager;
+      ResponseBody, ErrorMsg: string);
+    Procedure PrepareServerResponse(Response: TWebResponse);
+
+    procedure SaveHTTPRequestToDatabase(dbm: TDBManager; IdHTTP: TIdHTTP;
+      Method, RequestString: string);
+    procedure SaveHTTPResponseToDatabase(dbm: TDBManager; IdHTTP: TIdHTTP;
+      RequestMethod, ResponseBody, ErrorMsg: string);
+
+  private
+    RequestStartTime, RequestEndTime: TDateTime;
+    sAPIRequestID: String;
+
+    procedure Init;
+    procedure DestroyObjs;
+
+    procedure SaveAxRequestDetails(Request: TWebRequest;
+      Response: TWebResponse);
+    procedure SetCustomResponseHeaders(Response: TWebResponse);
+  public
+    constructor create;
+    destructor destroy;
+  end;
+
+implementation
+
+// ExtractApiMethodName
+function ExtractApiMethodName(const AURL: string): string;
+var
+  ParamsIndex: Integer;
+  URL: String;
+begin
+  Result := '';
+  try
+    URL := StringReplace(AURL, '/', '\', [rfReplaceAll]);
+    // If there are query parameters, find the segment before the first query parameter
+    ParamsIndex := Pos('?', URL);
+    if ParamsIndex > 0 then
+      // Extract the path part before the query parameters
+      Result := ExtractFileName(Copy(URL, 1, ParamsIndex - 1))
+    else
+      Result := ExtractFileName(URL); // Extract the last segment
+  finally
+  end;
+end;
+
+// ProcessandFormatContentSize
+function ProcessandFormatContentSize(const AStr: string): string;
+var
+  SizeBytes: Int64;
+  SizeKB: Double;
+  SizeMB: Double;
+begin
+  // Calculate size in bytes for UTF-8 encoding
+  SizeBytes := TEncoding.UTF8.GetByteCount(AStr);
+
+  // Determine how to format based on size
+  if SizeBytes < 1024 then
+    Result := IntToStr(SizeBytes) + ' B' // Less than 1KB, show in bytes
+  else
+  begin
+    SizeKB := SizeBytes / 1024; // Convert to KB
+    if SizeKB < 1024 then
+      Result := FormatFloat('#,##0.#', SizeKB) + ' KB'
+      // Between 1KB to 1023.99KB, show in KB
+    else
+    begin
+      SizeMB := SizeKB / 1024; // Convert to MB
+      Result := FormatFloat('#,##0.#', SizeMB) + ' MB';
+      // Greater than or equal to 1MB, show in MB
+    end;
+  end;
+end;
+
+// FormatTimeDifference
+function FormatTimeDifference(const pRequestStartTime, pRequestEndTime
+  : TDateTime): string;
+var
+  MillisecondsDiff: Int64;
+  SecondsDiff: Double;
+  MinutesDiff: Double;
+begin
+  // Calculate the difference in milliseconds
+  MillisecondsDiff := MilliSecondsBetween(pRequestEndTime, pRequestStartTime);
+
+  // Determine the appropriate format
+  if MillisecondsDiff < 1000 then
+    Result := Format('%d ms', [MillisecondsDiff])
+  else
+  begin
+    SecondsDiff := MillisecondsDiff / 1000.0;
+    if SecondsDiff < 60 then
+      Result := Format('%.1f s', [SecondsDiff])
+    else
+    begin
+      MinutesDiff := SecondsDiff / 60.0;
+      Result := Format('%.1f min', [MinutesDiff]);
+    end;
+  end;
+end;
+
+// GetAllHeaders
+function GetAllHeaders(Request: TWebRequest): string;
+const
+  CommonHeaders: array [0 .. 23] of string = ('Accept', 'Accept-Charset',
+    'Accept-Encoding', 'Accept-Language', 'Authorization', 'Cache-Control',
+    'Connection', 'Content-Length', 'Content-Type', 'Cookie', 'Date', 'Expect',
+    'From', 'Host', 'If-Match', 'If-Modified-Since', 'If-None-Match',
+    'If-Range', 'If-Unmodified-Since', 'Max-Forwards', 'Pragma', 'Referer',
+    'User-Agent', 'X-Client-App');
+var
+  i: Integer;
+  HeaderValue: string;
+begin
+  Result := '';
+  for i := Low(CommonHeaders) to High(CommonHeaders) do
+  begin
+    HeaderValue := Request.GetFieldByName(CommonHeaders[i]);
+    if HeaderValue <> '' then
+    begin
+      if Result <> '' then
+        Result := Result + #13#10; // add newline if not first header
+      Result := Result + CommonHeaders[i] + ': ' + HeaderValue;
+    end;
+  end;
+end;
+
+// GetRequestSource
+function GetRequestSource(Request: TWebRequest): string;
+begin
+  // Check User-Agent header first
+  Result := Request.UserAgent;
+
+  // If User-Agent is empty, check Referer header
+  if Result = '' then
+    Result := Request.Referer;
+
+  // If still empty, check custom header 'X-Client-App'
+  if Result = '' then
+    Result := Request.GetFieldByName('X-Client-App');
+
+  // If none of the above have a value, default to 'Unknown' or any desired default
+  if Result = '' then
+    Result := 'Unknown';
+end;
+
+// GetFullRequestURL
+function GetFullRequestURL(Request: TWebRequest): string;
+begin
+  Result := Request.RawPathInfo; // Start with the RawPathInfo
+
+  // Append the QueryString if present
+  // if Request.QueryString <> '' then
+  // Result := Result + '?' + Request.QueryString;
+end;
+
+function GetFullRequestURLNew(Request: TWebRequest): string;
+var
+  RequestURL: String;
+begin
+  RequestURL := '';
+  // Determine the protocol (http or https)
+  if Request.ProtocolVersion = 'HTTP/1.1' then
+  begin
+    RequestURL := Request.URL;
+    if RequestURL.StartsWith('https://') then
+      Result := 'https://'
+    else
+      Result := 'http://'
+  end
+  else
+    Result := 'http://';
+
+  // Append the host (domain or IP address) and port
+  Result := Result + Request.Host;
+
+  // Append base URL
+  Result := Result + Request.URL;
+
+  // Append the raw path info
+  Result := Result + Request.RawPathInfo;
+
+end;
+
+// GetAPINameFromFirstObject
+function GetAPINameFromFirstObject(const JSONObject: TJSONObject): string;
+var
+  Pair: TJSONPair;
+  FirstObject: TJSONObject;
+begin
+  Result := '';
+  if JSONObject.Size > 0 then
+  begin
+    Pair := JSONObject.Get(0); // Get the first key-value pair
+    if Assigned(Pair) and (Pair.jsonValue is TJSONObject) then
+    begin
+      FirstObject := Pair.jsonValue as TJSONObject;
+      // Attempt to find "apiname" key and get its value
+      Pair := FirstObject.Get('apiname');
+      if Assigned(Pair) then
+      begin
+        // Return the value of the "purpose" key as a string
+        Result := Pair.jsonValue.Value;
+      end;
+    end;
+  end;
+end;
+
+
+// GetAPINameFromRootObject
+function GetAPINameFromRootObject(const JSONObject: TJSONObject): string;
+var
+  Pair: TJSONPair;
+  FirstObject: TJSONObject;
+begin
+  Result := '';
+  try
+  if Assigned(JSONObject) and (JSONObject.Size > 0) then
+  begin
+    // Attempt to find "apiname" key and get its value
+    Pair := JSONObject.Get('apiname');
+    if Assigned(Pair) then
+    begin
+      // Return the value of the "purpose" key as a string
+      Result := Pair.jsonValue.Value;
+    end;
+  end;
+  except
+    //silent
+  end;
+end;
+
+// GetAPIName
+function GetAPIName(const JSONString: string): string;
+var
+  JSONObject: TJSONObject;
+  JSONPair: TJSONPair;
+  JSONArray: TJsonArray;
+  jsonValue: TJSONValue;
+begin
+  Result := '';
+  try
+    // Parse the main JSON string
+    JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+    if Assigned(JSONObject) then
+    begin
+      try
+        // Check if "_parameters" key exists and is a JSON array
+        JSONPair := JSONObject.Get('_parameters');
+        if Assigned(JSONPair) and (JSONPair.jsonValue is TJsonArray) then
+        begin
+          JSONArray := JSONPair.jsonValue as TJsonArray;
+          // Check if the array has at least one element and the first element is a JSON object
+          if (JSONArray.Size > 0) then
+          begin
+            jsonValue := JSONArray.Get(0);
+            if Assigned(jsonValue) and (jsonValue is TJSONObject) then
+            begin
+              // Get apiname from the first object in the array
+              Result := GetAPINameFromFirstObject(jsonValue as TJSONObject);
+            end;
+          end;
+        end
+        else
+        begin
+          Result := GetAPINameFromRootObject(JSONObject);
+        end;
+        if Result = '' then
+          // Get apiname from the main JSON object
+          Result := GetAPINameFromFirstObject(JSONObject);
+      finally
+        // Free the main JSON object
+        JSONObject.Free;
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      // Handle parsing or other errors
+    end;
+  end;
+end;
+
+// GetLocalIPAddress
+(*
+function GetLocalIPAddress: string;
+var
+  IPAddresses: TIdStackLocalAddressList;
+  i: Integer;
+begin
+  Result := 'Unknown';
+  IPAddresses := TIdStackLocalAddressList.create;
+  try
+    GStack.GetLocalAddressList(IPAddresses);
+    for i := 0 to IPAddresses.Count - 1 do
+    begin
+      // Check for an IPv4 address (you can adjust this to your needs)
+      if IPAddresses[i].IPVersion = Id_IPv4 then
+      begin
+        Result := IPAddresses[i].IPAddress;
+        Break;
+      end;
+    end;
+  finally
+    IPAddresses.Free;
+  end;
+end;
+*)
+//GetLocalIP   | ***Not in use - tried instead of  GetLocalIPAddress, as the we faced issue with func GetLocalIPAddress in xe8 and above
+function GetLocalIP: string;
+var
+  Stack: TIdStack;
+  Addr: string;
+begin
+  Result := '';
+  Stack := TIdStack.Create;
+  try
+    for Addr in Stack.LocalAddresses do
+    begin
+      if (Addr <> '127.0.0.1') and (Pos(':', Addr) = 0) then
+      begin
+        Result := Addr;
+        Break;
+      end;
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+
+//GetLocalIPNew |
+//function GetLocalIPNew: string;
+//var
+//  Lista: TIdStackLocalAddressList;
+//  temp: TIdStackLocalAddress;
+//  I: Integer;
+//begin
+//  Result := '';
+//  TIdStack.IncUsage;
+//  try
+//    Lista := TIdStackLocalAddressList.Create;
+//    try
+//      GStack.GetLocalAddressList(Lista);
+//      for I := 0 to Lista.Count - 1 do
+//      begin
+//        temp := Lista[I];
+//        if temp.IPVersion = Id_IPv4 then
+//        begin
+//          Result := temp.IPAddress;
+//          Exit;
+//        end;
+//      end;
+//    finally
+//      Lista.Free;
+//    end;
+//  finally
+//    TIdStack.DecUsage;
+//  end;
+//end;
+
+function GetLocalIPNew: string;
+begin
+  Result := GStack.LocalAddress;
+end;
+
+
+//GetLocalIPAddress  | it WAS used in SaveHTTPRequestToDatabase | It works with xe3 but not in xe8 and above
+function GetLocalIPAddress: string;
+var
+  IPAddresses: TIdStackLocalAddressList;
+  i: Integer;
+begin
+  Result := 'Unknown';
+  IPAddresses := TIdStackLocalAddressList.Create;
+  try
+    if Assigned(GStack) then
+    begin
+      GStack.GetLocalAddressList(IPAddresses);
+      if Assigned(IPAddresses) then
+      begin
+        for i := 0 to IPAddresses.Count - 1 do
+        begin
+          // Check for an IPv4 address and ignore loopback address
+          if (IPAddresses[i].IPVersion = Id_IPv4) and (IPAddresses[i].IPAddress <> '127.0.0.1') then
+          begin
+            Result := IPAddresses[i].IPAddress;
+            Break;
+          end;
+        end;
+      end;
+    end;
+  finally
+    IPAddresses.Free;
+  end;
+end;
+
+
+//GetClientIP | ***Not in use
+function GetClientIP(pRequest: TWebRequest): string;
+var
+  ClientIP: string;
+begin
+  Result := '';
+  ClientIP := pRequest.RemoteAddr;
+  if (ClientIP = '::1') or (ClientIP = '127.0.0.1') then
+     Result := GetLocalIPNew;//GetLocalIPAddress;
+  if Result = '' then
+    Result := ClientIP;
+end;
+
+
+// SaveAxRequestDetails
+procedure TAPILoggingHandler.SaveAxRequestDetails(Request: TWebRequest;
+  Response: TWebResponse);
+var
+  sURL, ClientIP: String;
+begin
+  try
+  RequestStartTime := Now;
+  slWebRequest.Clear;
+
+  // Generate a unique RequestID (you can adjust this logic as per your requirements)
+  slWebRequest.Values['RequestID'] := TGuid.NewGuid.ToString;
+
+  // Timestamp when the request was made
+  // slWebRequest.Values['Timestamp'] := DateTimeToStr(Now);
+
+  // Source application or entity invoking the API
+  slWebRequest.Values['SourceFrom'] := GetRequestSource(Request);
+  // 'UnKnown';//YourSourceApplication
+
+//  ClientIP := Request.RemoteAddr;
+//  if (ClientIP = '::1') or (ClientIP = '127.0.0.1') then
+//    ClientIP := GetLocalIPNew;//GetLocalIPAddress; //GetLocalIP;
+  // IP address of the machine from which the request originated
+  slWebRequest.Values['SourceMachineIP'] := GetClientIP(Request);//GetClientIP(Request);//Request.RemoteAddr;
+
+  // Request body (if applicable, for POST requests)
+  slWebRequest.Values['RequestString'] := Request.Content;
+
+  // HTTP headers sent with the request
+  slWebRequest.Values['Headers'] := GetAllHeaders(Request);
+
+  // Parameters or query string included in the request URL
+  slWebRequest.Values['Params'] := Request.Query;
+
+  // Authorization details (token, JWT, etc.)
+  slWebRequest.Values['Authz'] := Request.Authorization;
+
+  // Hostname or IP of the server being accessed
+  slWebRequest.Values['Host'] := Request.Host;
+
+  sURL := GetFullRequestURLNew(Request);
+  // Full URL used to invoke the API
+  slWebRequest.Values['URL'] := sURL;
+  // GetFullRequestURL(Request);//Request.URL;
+
+  // Name or identifier of the API method being called
+  // slWebRequest.Values['APIMethodName'] := ExtractApiMethodName(Request.URL);
+
+  // HTTP method used (GET, POST, PUT, DELETE, etc.)
+  slWebRequest.Values['RequestMethod'] := Request.Method;
+
+  // User associated with the API request (if applicable)
+  // slWebRequest.Values['User'] := Request.Username; // Adjust as per your application's authentication
+
+  // Additional details (if needed)
+  slWebRequest.Values['AdditionalDetails'] := ''; // AnyOtherDetails
+
+  // Content type of the request body
+  slWebRequest.Values['ContentType'] := Request.ContentType;
+
+  // Length of the request body in bytes
+  slWebRequest.Values['ContentLength'] := ProcessandFormatContentSize
+    (Request.Content);
+  // IntToStr(Request.ContentLength);
+
+  // Date and time when the request was received
+  slWebRequest.Values['requestReceivedTime'] := DateTimeToStr(Now);
+  // Or use another timestamp
+
+  // Endpoint or API method responded to (if applicable)
+  slWebRequest.Values['Endpoint'] := ExtractApiMethodName(sURL);
+  // ExtractApiMethodName(Request.URL);//'YourEndpointName'; // Adjust based on your application logic
+
+  // Purpose (outbound, FormNotification..,)
+  slWebRequest.Values['APIName'] := GetAPIName(Request.Content);
+
+  // Response header
+  SetCustomResponseHeaders(Response);
+  slWebRequest.Values['ResponseHeader'] := Response.CustomHeaders.Text;
+  // GetInvocationMetadata  //Response.CustomHeaders.Text;
+  //slWebRequest.SaveToFile
+    //('E:\Projects\Axpert\Axpert64\APIRequest_MetaData.log');
+  Except on E:Exception do
+    if Assigned(slWebRequest) then
+      slWebRequest.Values['AdditionalDetails']  := 'Error in SaveAxRequestDetails '+E.Message;
+  end;
+end;
+
+function GeneratePragma: string;
+var
+  SessionID: string;
+  SessionExpires: string;
+begin
+  // Generate session-related values dynamically
+  SessionID := TGuid.NewGuid.ToString; // Generate a new GUID as a session ID
+  SessionExpires := IntToStr(20 * 60 * 1000);
+  // Example: 20 minutes in milliseconds
+  Result := Format('dssession=%s,dssessionexpires=%s',
+    [SessionID, SessionExpires]);
+end;
+
+function GetServerInfo: string;
+var
+  Buffer: array [0 .. 255] of Char;
+  Size: DWORD;
+begin
+  Size := SizeOf(Buffer);
+  if GetComputerName(Buffer, Size) then
+    Result := Format('%s/1.0', [Buffer])
+  else
+    Result := 'UnknownServer/1.0';
+end;
+
+function GetPoweredBy: string;
+var
+  OSVersionInfo: TOSVersionInfo;
+begin
+  OSVersionInfo.dwOSVersionInfoSize := SizeOf(TOSVersionInfo);
+  if GetVersionEx(OSVersionInfo) then
+    Result := Format('Windows %d.%d', [OSVersionInfo.dwMajorVersion,
+      OSVersionInfo.dwMinorVersion])
+  else
+    Result := 'UnknownOS';
+end;
+
+Procedure TAPILoggingHandler.SetCustomResponseHeaders(Response: TWebResponse);
+begin
+  // Set dynamic headers
+  Response.SetCustomHeader('Pragma', GeneratePragma);
+  Response.SetCustomHeader('Server', GetServerInfo);
+  Response.SetCustomHeader('X-Powered-By', GetPoweredBy);
+
+  // Set other necessary headers
+  Response.ContentType := 'application/json';
+  // or any other appropriate content type
+  Response.SetCustomHeader('Date',
+    FormatDateTime('ddd, dd mmm yyyy hh:nn:ss "GMT"', (Now))); // format as GMT
+  // Response.ContentLength := Length(Response.Content); // Set content length dynamically
+end;
+
+Procedure TAPILoggingHandler.Init;
+begin
+  slWebRequest := nil;
+  slWebRequest := TStringList.create;
+end;
+
+Procedure TAPILoggingHandler.DestroyObjs;
+begin
+  If Assigned(slWebRequest) then
+    FreeAndNil(slWebRequest);
+end;
+
+constructor TAPILoggingHandler.create;
+begin
+  // create
+  Init;
+end;
+
+destructor TAPILoggingHandler.destroy;
+begin
+  // destroy
+end;
+
+function GetDLLDirectory: string;
+var
+  ModuleName: array [0 .. MAX_PATH] of Char;
+  DLLPath: string;
+begin
+  // Get the module file name of the DLL
+  if GetModuleFileName(HInstance, ModuleName, MAX_PATH) > 0 then
+  begin
+    DLLPath := ExtractFilePath(ModuleName);
+    // Ensure it ends with a backslash
+    if not DLLPath.EndsWith('\') then
+      DLLPath := DLLPath + '\';
+    Result := DLLPath;
+  end
+  else
+    Result := '';
+end;
+
+// WriteRESTLog | Internal use , debug
+Procedure WriteRESTLog(msg: String);
+var
+  logFile: String;
+begin
+  Exit;
+  logFile := GetDLLDirectory + 'APIRequest.log';
+  With TStringList.create do
+  begin
+    if FileExists(logFile) then
+      LoadFromFile(logFile);
+    Add('');
+    Add('Log DateTime ' + DateTimeToStr(Now));
+    Add(msg);
+    SaveToFile(logFile);
+    Free;
+  end;
+end;
+
+// Log request
+procedure TAPILoggingHandler.LogRequest(Request: TWebRequest;
+  Response: TWebResponse);
+begin
+  try
+  if Assigned(Request) and Assigned(Response) then
+  begin
+    // WriteRESTLog('LogRequest/Request URL: ' + Request.URL);
+    SaveAxRequestDetails(Request, Response);
+  end;
+  except
+    //Exception handling
+  end;
+end;
+
+// SaveRequestToDatabase
+procedure TAPILoggingHandler.SaveRequestToDatabase(dbm: TDBManager);
+var
+  sDateTime: String;
+  OldServerDateTime: TDateTime;
+  axds: TXDS;
+begin
+  if Not Assigned(dbm) then
+    Exit;
+  dbm.gf.DoDebug.msg('SaveRequestToDatabase starts...');
+  if Not Assigned(slWebRequest) or (slWebRequest.Count = 0) then
+  begin
+    // WriteRESTLog('SaveRequestToDatabase/ No data found in the WebRequest.');
+    dbm.gf.DoDebug.msg
+      ('SaveRequestToDatabase/ No data found in the WebRequest.');
+    Exit;
+  end;
+
+  axds := nil;
+  try
+    axds := dbm.GetXDS(nil);
+    try
+      axds.close;
+      axds.Append('AxRequest');
+      sAPIRequestID := slWebRequest.Values['RequestID'];
+      axds.Submit('RequestID', sAPIRequestID, 'c');
+      OldServerDateTime := dbm.ServerDateTime;
+      // due to ServerDateTime condition in udbmanager its not fetching recent datetime
+      // so we used this approach to get the value
+      dbm.ServerDateTime := 0;
+      sDateTime := DateTimeToStr(dbm.getserverdatetime);
+      dbm.ServerDateTime := OldServerDateTime;
+      // axds.Submit('Timestamp',sDateTime,'d');  //Timestamp & responseSentTime are same
+      axds.Submit('RequestReceivedTime', sDateTime, 'd');
+      // Timestamp & responseSentTime are same
+
+      axds.Submit('SourceFrom', slWebRequest.Values['SourceFrom'], 'c');
+      // Timestamp & responseSentTime are same
+      axds.Submit('SourceMachineIP', slWebRequest.Values['SourceMachineIP'],
+        'c'); // Timestamp & responseSentTime are same
+
+      axds.Submit('RequestString', slWebRequest.Values['RequestString'], 'c');
+      axds.Submit('ContentType', slWebRequest.Values['ContentType'], 'c');
+      axds.Submit('ContentLength', slWebRequest.Values['ContentLength'], 'c');
+      axds.Submit('Headers', slWebRequest.Values['Headers'], 'c');
+      axds.Submit('Params', slWebRequest.Values['Params'], 'c');
+      axds.Submit('AuthZ', slWebRequest.Values['Authz'], 'c');
+
+      axds.Submit('Host', slWebRequest.Values['Host'], 'c');
+      axds.Submit('URL', slWebRequest.Values['URL'], 'c');
+      axds.Submit('Endpoint', slWebRequest.Values['Endpoint'], 'c');
+      axds.Submit('RequestMethod',
+        UpperCase(slWebRequest.Values['RequestMethod']), 'c');
+      axds.Submit('APIName', slWebRequest.Values['APIName'], 'c');
+      axds.Submit('UserName', dbm.gf.username, 'c');
+      axds.Submit('AdditionalDetails', '', 'c');
+
+      axds.Post;
+    except
+      on E: Exception do
+      begin
+        dbm.gf.DoDebug.Log(dbm.gf.Axp_logstr +
+          '\uAPILoggingImpl\SaveRequestToDatabase - ' + E.Message);
+        dbm.gf.DoDebug.msg(E.Message);
+      end;
+    end;
+  finally
+    // finally
+    if Assigned(axds) then
+    begin
+      if axds.Active then
+        axds.close;
+      FreeAndNil(axds);
+    end;
+  end;
+  dbm.gf.DoDebug.msg('SaveRequestToDatabase ends.');
+end;
+
+// GetJSONValue
+function GetJSONValue(JSONObject: TJSONObject; const key: string): TJSONValue;
+var
+  JSONPair: TJSONPair;
+begin
+  Result := nil;
+  if JSONObject <> nil then
+  begin
+    JSONPair := JSONObject.Get(key);
+    if Assigned(JSONPair) then
+      Result := JSONPair.jsonValue;
+  end;
+end;
+
+// FindValue
+function FindValue(const AJSON: TJSONObject; const AKey: string): TJSONValue;
+var
+  Pair: TJSONPair;
+begin
+  Result := nil;
+  if not Assigned(AJSON) then
+    Exit;
+
+  Pair := AJSON.Get(AKey); // Retrieves the TJSONPair for the given key
+  if Assigned(Pair) then
+    Result := Pair.jsonValue;
+  // If the pair exists, return the associated JSON value
+end;
+
+// IsFailedResponse
+function IsFailedResponse(const jsonResponse: TJSONObject): Boolean;
+var
+  statusValue, errorValue, resultValue: TJSONValue;
+  resultArray: TJsonArray;
+  resultObject: TJSONObject;
+begin
+  Result := False;
+  if Assigned(jsonResponse) then
+  begin
+    // Check for top-level "status" key
+{$IFDEF VER240}
+    statusValue := GetJSONValue(jsonResponse, 'status');
+{$ELSE}
+    statusValue := jsonResponse.GetValue('status');
+{$ENDIF}
+    if Assigned(statusValue) and (Lowercase(statusValue.Value) = 'failed') then
+    begin
+      Result := True;
+      Exit;
+    end;
+
+    // Check for top-level "error" key
+{$IFDEF VER240}
+    errorValue := GetJSONValue(jsonResponse, 'error');
+{$ELSE}
+    errorValue := jsonResponse.GetValue('error');
+{$ENDIF}
+    if Assigned(errorValue) then
+    begin
+      Result := True;
+      Exit;
+    end;
+
+    // Check for "result" array
+{$IFDEF VER240}
+    resultValue := GetJSONValue(jsonResponse, 'result');
+    if Assigned(resultValue) and (resultValue is TJsonArray) then
+    begin
+      resultArray := TJsonArray(resultValue);
+      if (resultArray.Size > 0) and (resultArray.Get(0) is TJSONObject) then
+      begin
+        resultObject := TJSONObject(resultArray.Get(0));
+        if Assigned(resultObject) then
+        begin
+          statusValue := FindValue(resultObject, 'status');
+          if Assigned(statusValue) and (Lowercase(statusValue.Value) = 'failed')
+          then
+          begin
+            Result := True;
+            Exit;
+          end;
+
+          // Check for "error" key under "result" object
+          errorValue := FindValue(resultObject, 'error');
+          if Assigned(errorValue) then
+          begin
+            Result := True;
+            Exit;
+          end;
+        end;
+      end;
+    end;
+
+{$ELSE}
+    resultValue := GetJSONValue(jsonResponse, 'result');
+    if Assigned(resultValue) and (resultValue is TJsonArray) then
+    begin
+      resultArray := TJsonArray(resultValue);
+      if (resultArray.Size > 0) and (resultArray.Get(0) is TJSONObject) then
+      begin
+        resultObject := TJSONObject(resultArray.Get(0));
+        if Assigned(resultObject) then
+        begin
+          statusValue := FindValue(resultObject, 'status');
+          // resultObject.FindValue('status');
+          if Assigned(statusValue) and (Lowercase(statusValue.Value) = 'failed')
+          then
+          begin
+            Result := True;
+            Exit;
+          end;
+
+          // Check for "error" key under "result" object
+          errorValue := FindValue(resultObject, 'error');
+          // resultObject.FindValue('error');
+          if Assigned(errorValue) then
+          begin
+            Result := True;
+            Exit;
+          end;
+        end;
+      end;
+    end;
+{$ENDIF}
+  end;
+end;
+
+function TryGetValue(const AJSON: TJSONObject; const AKey: string;
+  out AValue: TJSONValue): Boolean;
+var
+  JaysonPair: TJSONPair;
+begin
+  JaysonPair := AJSON.Get(AKey);
+  if JaysonPair <> nil then
+  begin
+    AValue := JaysonPair.jsonValue;
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+// IsErrorResponse
+function IsErrorResponse(const jsonResponse: TJSONObject): Boolean;
+var
+  errorValue, resultValue: TJSONValue;
+  resultArray: TJsonArray;
+  resultObject: TJSONObject;
+begin
+  Result := False;
+  if Assigned(jsonResponse) then
+  begin
+    // Check for top-level "status" key with "failed" value
+
+{$IFDEF VER240}
+    if TryGetValue(jsonResponse, 'status', errorValue) then
+{$ELSE}
+    if jsonResponse.TryGetValue<TJSONValue>('status', errorValue) then
+{$ENDIF};
+
+    // if jsonResponse.TryGetValue<TJSONValue>('status', errorValue) then
+    begin
+      if Assigned(errorValue) and (Lowercase(errorValue.Value) = 'failed') then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+
+    // Check for top-level "error" key
+{$IFDEF VER240}
+    errorValue := GetJSONValue(jsonResponse, 'error');
+{$ELSE}
+    errorValue := jsonResponse.GetValue('error');
+{$ENDIF}
+    // errorValue := jsonResponse.GetValue('error');
+    if Assigned(errorValue) then
+    begin
+      Result := True;
+      Exit;
+    end;
+
+    // Check for "result" array
+{$IFDEF VER240}
+    resultValue := GetJSONValue(jsonResponse, 'result');
+{$ELSE}
+    resultValue := jsonResponse.GetValue('result');
+{$ENDIF}
+    // resultValue := jsonResponse.GetValue('result');
+    if Assigned(resultValue) and (resultValue is TJsonArray) then
+    begin
+      resultArray := TJsonArray(resultValue);
+{$IFDEF VER240}
+      if (resultArray.Size > 0) and (resultArray.Get(0) is TJSONObject) then
+{$ELSE}
+      if (resultArray.Count > 0) and (resultArray.Items[0] is TJSONObject) then
+{$ENDIF}
+      // if (resultArray.Count > 0) and (resultArray.Items[0] is TJSONObject) then
+      begin
+{$IFDEF VER240}
+        resultObject := TJSONObject(resultArray.Get(0));
+{$ELSE}
+        resultObject := TJSONObject(resultArray.Items[0]);
+{$ENDIF}
+        // resultObject := TJSONObject(resultArray.Items[0]);
+        if Assigned(resultObject) then
+        begin
+{$IFDEF VER240}
+          errorValue := GetJSONValue(resultObject, 'error');
+{$ELSE}
+          errorValue := resultObject.GetValue('error');
+{$ENDIF}
+          if Assigned(errorValue) then
+          begin
+            Result := True;
+            Exit;
+          end;
+        end;
+      end;
+    end;
+  end;
+end;
+
+// GetResponseStatus
+function GetResponseStatus(ResponseContent: String): String;
+var
+  jsonResponse: TJSONObject;
+  jsonValue: TJSONValue;
+begin
+  try
+    Result := '200';
+//Commented updating server response code and status as it's casuing issue(400 bad request) in some server
+//    // Parse Response.Content to TJSONObject
+//    jsonValue := TJSONObject.ParseJSONValue(ResponseContent);
+//
+//    if jsonValue is TJSONObject then
+//    begin
+//      jsonResponse := TJSONObject(jsonValue);
+//      try
+//        if IsFailedResponse(jsonResponse) then
+//        begin
+//          Result := '400';
+//          Exit; // Exit the handler after processing this case
+//        end
+//        // Check for "error" response and set appropriate status code and message
+//        else if IsErrorResponse(jsonResponse) then
+//        begin
+//          Result := '500';
+//          Exit; // Exit the handler after processing this case
+//        end;
+//      finally
+//        // Clean up JSON objects if necessary
+//        jsonResponse.Free;
+//      end;
+//    end
+//    else if (ResponseContent = '') then
+//    begin
+//      // if empty response
+//      Result := '500';
+//    end
+//    else
+//    begin
+//      // If parsing failed
+//      (*
+//        Incase if the JSON string prepared has special chars which is not escaped properly
+//        then it will fail to parse. To handle suce cases we added this block.
+//      *)
+//      Result := '200';
+//    end;
+
+  finally
+    jsonResponse := nil;
+  end;
+end;
+
+function IsValidJson(const InputData: string): Boolean;
+var
+  jsonValue: TJSONValue;
+begin
+  try
+    jsonValue := TJSONObject.ParseJSONValue(InputData);
+    Result := Assigned(jsonValue);
+  finally
+    jsonValue.Free;
+  end;
+end;
+
+// RemoveSplitCharAndMakeValidJsonStr
+function RemoveSplitCharAndMakeValidJsonStr(pInputJsonStr: String): String;
+var
+  sStrTobeReplaced, sStrReplaceWith: String;
+begin
+  Result := pInputJsonStr;
+  if pInputJsonStr = '' then
+    Exit;
+  sStrTobeReplaced := '}*$*{';
+  sStrReplaceWith := ',';
+
+  pInputJsonStr := ReplaceStr(pInputJsonStr, sStrTobeReplaced, sStrReplaceWith);
+
+  sStrTobeReplaced := '}#$#{';
+  pInputJsonStr := ReplaceStr(pInputJsonStr, sStrTobeReplaced, sStrReplaceWith);
+  Result := pInputJsonStr;
+end;
+
+// EscapeJSONString
+// takes a JSON string as input and returns an escaped JSON string as output
+function EscapeJSONString(const JSON: string): string;
+const
+  SpecialChars = ['\', '"', '/', #8, #9, #10, #12, #13];
+var
+  i: Integer;
+  sb: TStringBuilder;
+begin
+  sb := TStringBuilder.create;
+  try
+    for i := 1 to Length(JSON) do
+    begin
+      case JSON[i] of
+        '\':
+          sb.Append('\\');
+        // '"': sb.Append('\"'); //this is not required , else this will replace normal key value "
+        '/':
+          sb.Append('\/');
+        #8:
+          sb.Append('\b');
+        #9:
+          sb.Append('\t');
+        #10:
+          sb.Append('\n');
+        #12:
+          sb.Append('\f');
+        #13:
+          sb.Append('\r');
+      else
+        if JSON[i] < #32 then
+          sb.Append('\u').Append(Format('%.4x', [Ord(JSON[i])]))
+        else
+          sb.Append(JSON[i]);
+      end;
+    end;
+    Result := sb.ToString;
+  finally
+    sb.Free;
+  end;
+end;
+
+// PrepareJsonResult
+(*
+  This function mainly introduced to handle AxpertJobsAPI response, because where we cannot
+  capture proper json result due to its implementation logic.
+  This can be used for any other purpose as well if req in the future
+*)
+function PrepareJsonResult(const endpoint: string;
+  const InputData: string): string;
+var
+  sErrStr: string;
+begin
+  Result := InputData;
+  try
+    if IsValidJson(InputData) then
+      Exit
+    else if (InputData <> '') and (Lowercase(endpoint) <> 'axpertjobsapi') then
+    begin
+      // If not valid json
+      Result := EscapeJSONString(InputData);
+    end
+    else if (Lowercase(endpoint) = 'axpertjobsapi') then
+    begin
+      // This will be executed only for axpertjobsapi
+      // since Axpertjobs API rerurns empty for success and normal str for error.
+      if Trim(InputData) = '' then
+        Result := '{"status":"success","msg":"Script executed successfully"}'
+      else
+      begin
+        sErrStr := InputData;
+        sErrStr := RemoveSplitCharAndMakeValidJsonStr(sErrStr);
+        Result := '{"error":{"status":"failed","msg":"' + sErrStr + '"}}';
+      end;
+    end;
+
+  finally
+
+  end;
+end;
+
+// SaveResponseToDatabase
+procedure TAPILoggingHandler.SaveResponseToDatabase(dbm: TDBManager;
+  ResponseBody, ErrorMsg: string);
+var
+  sDateTime, ExecutionTime, ContentLength, endpoint: String;
+  OldServerDateTime: TDateTime;
+  axds: TXDS;
+begin
+  if Not Assigned(dbm) then
+    Exit;
+  RequestEndTime := Now;
+  dbm.gf.DoDebug.msg('SaveResponseToDatabase starts...');
+  axds := nil;
+  try
+    axds := dbm.GetXDS(nil);
+    try
+      axds.close;
+      axds.Append('AxResponse');
+      axds.Submit('ResponseID', TGuid.NewGuid.ToString, 'c');
+      OldServerDateTime := dbm.ServerDateTime;
+      // due to ServerDateTime condition in udbmanager its not fetching recent datetime
+      // so we used this approach to get the value
+      dbm.ServerDateTime := 0;
+      sDateTime := DateTimeToStr(dbm.getserverdatetime);
+      dbm.ServerDateTime := OldServerDateTime;
+      // axds.Submit('Timestamp',sDateTime,'d');  //Timestamp & responseSentTime are same
+      axds.Submit('ResponseSentTime', sDateTime, 'd'); //
+      endpoint := slWebRequest.Values['Endpoint'];
+      ResponseBody := PrepareJsonResult(endpoint, ResponseBody);
+      dbm.gf.DoDebug.msg('GetResponseStatus starts');
+      axds.Submit('StatusCode', GetResponseStatus(ResponseBody), 'n');
+      dbm.gf.DoDebug.msg('GetResponseStatus ends');
+      // Responsecode need to be identified
+      axds.Submit('ResponseString', ResponseBody, 'c');
+      axds.Submit('ContentType', 'application/json', 'c'); // hardcoded
+      ContentLength := ProcessandFormatContentSize(ResponseBody);
+      axds.Submit('ContentLength', ContentLength, 'c');
+      axds.Submit('Headers', ReplaceStr(slWebRequest.Values['ResponseHeader'] +
+        'Content-Length=' + ContentLength, '=', ':')
+        { IdHTTP.Response.RawHeaders.Text } , 'c');
+      ExecutionTime := FormatTimeDifference(RequestStartTime, RequestEndTime);
+      axds.Submit('ExecutionTime', ExecutionTime, 'c');
+      axds.Submit('ErrorDetails', ErrorMsg, 'c');
+      axds.Submit('Endpoint', endpoint, 'c');
+      axds.Submit('RequestMethod',
+        UpperCase(slWebRequest.Values['RequestMethod']), 'c');
+      axds.Submit('UserName', dbm.gf.username, 'c');
+      axds.Submit('AdditionalDetails', '', 'c');
+      sAPIRequestID := slWebRequest.Values['RequestID'];
+      axds.Submit('RequestID', sAPIRequestID, 'c');
+      axds.Post;
+    except
+      on E: Exception do
+      begin
+        dbm.gf.DoDebug.Log(dbm.gf.Axp_logstr +
+          '\uAPILoggingImpl\SaveResponseToDatabase - ' + E.Message);
+        dbm.gf.DoDebug.msg(E.Message);
+      end;
+    end;
+  finally
+    // finally
+    if Assigned(axds) then
+    begin
+      if axds.Active then
+        axds.close;
+      FreeAndNil(axds);
+    end;
+  end;
+  dbm.gf.DoDebug.msg('SaveResponseToDatabase ends.');
+end;
+
+// PrepareServerResponse
+Procedure TAPILoggingHandler.PrepareServerResponse(Response: TWebResponse);
+var
+  jsonResponse: TJSONObject;
+  jsonValue: TJSONValue;
+begin
+  try
+//Commented updating server response code and status as it's casuing issue in some server
+//    // Parse Response.Content to TJSONObject
+//    jsonValue := TJSONObject.ParseJSONValue(Response.Content);
+//
+//    //just for loggin purpose
+////    With TStringList.create do
+////    begin
+////      Add(Response.Content);
+////      SaveToFile(GetDLLDirectory+'\response.txt');
+////      Free;
+////    end;
+//
+//    if jsonValue is TJSONObject then
+//    begin
+//      jsonResponse := TJSONObject(jsonValue);
+//
+//      try
+//        if IsFailedResponse(jsonResponse) then
+//        begin
+//          Response.StatusCode := 400;
+//          Response.ReasonString := 'Bad Request';
+//          Exit; // Exit the handler after processing this case
+//        end
+//        // Check for "error" response and set appropriate status code and message
+//        else if IsErrorResponse(jsonResponse) then
+//        begin
+//          Response.StatusCode := 500;
+//          Response.ReasonString := 'Internal Server Error';
+//          Exit; // Exit the handler after processing this case
+//        end;
+//      finally
+//        // Clean up JSON objects if necessary
+//        jsonResponse.Free;
+//      end;
+//    end
+//    else
+//    begin
+//      // If parsing failed or content is not a valid JSON object
+//      Response.StatusCode := 500;
+//      Response.ReasonString := 'Internal Server Error';
+//      Response.Content := 'Invalid JSON response';
+//    end;
+
+    (*
+      06/06/2024
+      Issue :
+      In a Delphi XE3 DataSnap REST project, the default content type not be set to application/json when returning responses.
+
+      Fix :
+      Explicitly set the desired content type for our API responses.
+
+      Using the WebModuleAfterDispatch event is indeed a simpler and
+      effective way to ensure that the ContentType is correctly set for all responses
+      from your TWebModule.
+      This approach can centralize the content type setting and simplify your code.
+
+      Few considerations to keep in mind:
+
+      Global Setting:
+      By setting the ContentType in the WebModuleAfterDispatch event, we are applying it to all responses.
+      This is fine if all your responses need to be of the same content type,
+      but if we have endpoints that need to return different content types
+      (e.g., JSON, HTML, XML, etc.), we might need a more granular approach.
+
+      Conditional ContentType:
+      If we want to set the ContentType based on specific conditions
+      (e.g., depending on the request path or parameters),
+      we can still use the WebModuleAfterDispatch event but add some logic to handle different cases.
+    *)
+    Response.ContentType := 'application/json';
+  finally
+    jsonResponse := nil;
+  end;
+end;
+
+
+// HTTP Request Response process | For ProfitEval Execute API
+
+// GetRequestContentType
+function GetRequestContentType(ARequest: TIdHTTPRequest): string;
+var
+  i, DelimiterPos: Integer;
+  HeaderLine: String;
+begin
+  // Set return an empty string
+  Result := '';
+
+  // First, check if ContentType is set directly
+  if ARequest.ContentType <> '' then
+  begin
+    Result := ARequest.ContentType;
+    Exit;
+  end;
+
+  // If ContentType is not set directly, check the custom headers
+  // Due to : for assigning values / some other reason , we are unable to read
+  // values directly , so we are approaching diff way to fetch the value
+
+  // Iterate through CustomHeaders to find 'Content-Type'
+  for i := 0 to ARequest.CustomHeaders.Count - 1 do
+  begin
+    // Check if the header name is 'Content-Type' (case-insensitive)
+    if SameText(ARequest.CustomHeaders.Names[i], 'Content-Type') then
+    begin
+      HeaderLine := ARequest.CustomHeaders[i];
+      DelimiterPos := Pos(':', HeaderLine);
+      if DelimiterPos > 0 then
+      begin
+        Result := Trim(Copy(HeaderLine, DelimiterPos + 1, Length(HeaderLine)));
+        // Result := ARequest.CustomHeaders.ValueFromIndex[i];
+        Exit;
+      end;
+    end;
+  end;
+end;
+
+// GetRequestSource
+function GetHTTPRequestSource(IdHTTP: TIdHTTP): string;
+begin
+  Result := 'unknown'; // Default value if none of the headers are found
+
+  try
+    // Check User-Agent header
+    if IdHTTP.Request.UserAgent <> '' then
+    begin
+      Result := IdHTTP.Request.UserAgent;
+      Exit; // Return immediately if User-Agent header is found
+    end;
+
+    // Check Referer header
+    if IdHTTP.Request.Referer <> '' then
+    begin
+      Result := IdHTTP.Request.Referer;
+      Exit; // Return immediately if Referer header is found
+    end;
+
+    // Check custom headers
+    if IdHTTP.Request.CustomHeaders.IndexOfName('X-Client-App') <> -1 then
+    begin
+      Result := IdHTTP.Request.CustomHeaders.Values['X-Client-App'];
+      Exit; // Return immediately if custom header is found
+    end;
+
+    // Add more checks for additional headers if needed
+
+  except
+    on E: Exception do
+    begin
+      // Handle exceptions (optional)
+      Result := 'error: ' + E.Message;
+    end;
+  end;
+end;
+
+// ExtractURLParams
+function ExtractURLParams(const URL: string): string;
+var
+  URI: TIdURI;
+  ParamsList: TStringList;
+  Param: string;
+begin
+  Result := '';
+
+  // Create a TStringList to hold the parameters
+  ParamsList := TStringList.create;
+  try
+    // Parse the URL using TIdURI
+    URI := TIdURI.create(URL);
+    try
+      // Check if there are parameters in the URL
+      if URI.Params <> '' then
+      begin
+        // Split the parameters into individual strings
+        ParamsList.Delimiter := '&';
+        ParamsList.DelimitedText := URI.Params;
+
+        // Build the result string with parameters
+        for Param in ParamsList do
+        begin
+          if Result <> '' then
+            Result := Result + ', ';
+
+          Result := Result + Param;
+        end;
+      end;
+    finally
+      URI.Free;
+    end;
+  finally
+    ParamsList.Free;
+  end;
+end;
+
+
+// GetPurposeFromFirstObject
+function GetPurposeFromFirstObject(const JSONObject: TJSONObject): string;
+var
+  Pair: TJSONPair;
+  FirstObject: TJSONObject;
+begin
+  Result := '';
+  if JSONObject.Size > 0 then
+  begin
+    Pair := JSONObject.Get(0); // Get the first key-value pair
+    if Assigned(Pair) and (Pair.jsonValue is TJSONObject) then
+    begin
+      FirstObject := Pair.jsonValue as TJSONObject;
+      // Attempt to find "purpose" key and get its value
+      Pair := FirstObject.Get('apipurpose');
+      if Assigned(Pair) then
+      begin
+        // Return the value of the "purpose" key as a string
+        Result := Pair.jsonValue.Value;
+      end;
+    end;
+  end;
+end;
+
+// GetPurposeValue
+function GetPurposeValue(const JSONString: string): string;
+var
+  JSONObject: TJSONObject;
+  JSONPair: TJSONPair;
+  JSONArray: TJsonArray;
+  jsonValue: TJSONValue;
+begin
+  Result := '';
+  try
+    // Parse the main JSON string
+    JSONObject := TJSONObject.ParseJSONValue(JSONString) as TJSONObject;
+    if Assigned(JSONObject) then
+    begin
+      try
+        // Check if "_parameters" key exists and is a JSON array
+        JSONPair := JSONObject.Get('_parameters');
+        if Assigned(JSONPair) and (JSONPair.jsonValue is TJsonArray) then
+        begin
+          JSONArray := JSONPair.jsonValue as TJsonArray;
+          // Check if the array has at least one element and the first element is a JSON object
+          if (JSONArray.Size > 0) then
+          begin
+            jsonValue := JSONArray.Get(0);
+            if Assigned(jsonValue) and (jsonValue is TJSONObject) then
+            begin
+              // Get purpose from the first object in the array
+              Result := GetPurposeFromFirstObject(jsonValue as TJSONObject);
+            end;
+          end;
+        end
+        else
+        begin
+          // Get purpose from the main JSON object
+          Result := GetPurposeFromFirstObject(JSONObject);
+        end;
+      finally
+        // Free the main JSON object
+        JSONObject.Free;
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      // Handle parsing or other errors
+    end;
+  end;
+end;
+
+// SaveHTTPRequestToDatabase
+procedure TAPILoggingHandler.SaveHTTPRequestToDatabase(dbm: TDBManager;
+  IdHTTP: TIdHTTP; Method, RequestString: string);
+var
+  sDateTime: String;
+  OldServerDateTime: TDateTime;
+  axds: TXDS;
+begin
+  if Not Assigned(dbm) then
+    Exit;
+  RequestStartTime := Now;
+  dbm.gf.DoDebug.msg('SaveHTTPRequestToDatabase starts...');
+  axds := nil;
+  try
+    axds := dbm.GetXDS(nil);
+    try
+      axds.close;
+      axds.Append('AxRequest');
+      sAPIRequestID := TGuid.NewGuid.ToString;
+      axds.Submit('RequestID', sAPIRequestID, 'c');
+      OldServerDateTime := dbm.ServerDateTime;
+      // due to ServerDateTime condition in udbmanager its not fetching recent datetime
+      // so we used this approach to get the value
+      dbm.ServerDateTime := 0;
+      sDateTime := DateTimeToStr(dbm.getserverdatetime);
+      dbm.ServerDateTime := OldServerDateTime;
+      // axds.Submit('Timestamp',sDateTime,'d');  //Timestamp & responseSentTime are same
+      axds.Submit('RequestReceivedTime', sDateTime, 'd');
+      // Timestamp & responseSentTime are same
+
+      axds.Submit('SourceFrom', GetHTTPRequestSource(IdHTTP), 'c');
+      // Timestamp & responseSentTime are same
+      axds.Submit('SourceMachineIP', GetLocalIPNew {GetLocalIPAddress} { IdHTTP.Request.Host } ,
+        'c'); // Timestamp & responseSentTime are same
+
+      axds.Submit('RequestString',
+        { IdHTTP.Request.Content } RequestString, 'c');
+      axds.Submit('ContentType', GetRequestContentType(IdHTTP.Request)
+        { IdHTTP.Request.ContentType } , 'c');
+      axds.Submit('ContentLength',
+        ProcessandFormatContentSize
+        ( { IdHTTP.Request.Content } RequestString), 'c');
+      axds.Submit('Headers', IdHTTP.Request.CustomHeaders.Text, 'c');
+      axds.Submit('Params', ExtractURLParams(IdHTTP.Request.URL), 'c');
+      axds.Submit('AuthZ', IdHTTP.Request.CustomHeaders.Values
+        ['Authorization'], 'c');
+
+      axds.Submit('Host', IdHTTP.Request.Host, 'c');
+      axds.Submit('URL', IdHTTP.URL.URI, 'c');
+      axds.Submit('Endpoint', ExtractApiMethodName(IdHTTP.URL.URI), 'c');
+      axds.Submit('RequestMethod', UpperCase(Method), 'c');
+      //axds.Submit('Purpose', GetPurposeValue(RequestString), 'c');
+      axds.Submit('APIName', GetAPIName(RequestString), 'c');
+      axds.Submit('UserName', dbm.gf.username, 'c');
+      axds.Submit('AdditionalDetails', '', 'c');
+
+      axds.Post;
+    except
+      on E: Exception do
+      begin
+        dbm.gf.DoDebug.Log(dbm.gf.Axp_logstr +
+          '\uProfitEval\SaveHTTPRequestToDatabase - ' + E.Message);
+        dbm.gf.DoDebug.msg(E.Message);
+      end;
+    end;
+  finally
+    // finally
+  end;
+  dbm.gf.DoDebug.msg('SaveHTTPRequestToDatabase ends.');
+end;
+
+// SaveHTTPResponseToDatabase
+procedure TAPILoggingHandler.SaveHTTPResponseToDatabase(dbm: TDBManager;
+  IdHTTP: TIdHTTP; RequestMethod, ResponseBody, ErrorMsg: string);
+var
+  sDateTime, ExecutionTime: String;
+  OldServerDateTime: TDateTime;
+  axds: TXDS;
+begin
+  if Not Assigned(dbm) then
+    Exit;
+  RequestEndTime := Now;
+  dbm.gf.DoDebug.msg('SaveHTTPResponseToDatabase starts...');
+  axds := nil;
+  try
+    axds := dbm.GetXDS(nil);
+    try
+      axds.close;
+      axds.Append('AxResponse');
+      axds.Submit('ResponseID', TGuid.NewGuid.ToString, 'c');
+      OldServerDateTime := dbm.ServerDateTime;
+      // due to ServerDateTime condition in udbmanager its not fetching recent datetime
+      // so we used this approach to get the value
+      dbm.ServerDateTime := 0;
+      sDateTime := DateTimeToStr(dbm.getserverdatetime);
+      dbm.ServerDateTime := OldServerDateTime;
+      // axds.Submit('Timestamp',sDateTime,'d');  //Timestamp & responseSentTime are same
+      axds.Submit('ResponseSentTime', sDateTime, 'd'); //
+      axds.Submit('StatusCode', IntToStr(IdHTTP.ResponseCode), 'n');
+      axds.Submit('ResponseString', ResponseBody, 'c');
+      axds.Submit('ContentType', IdHTTP.Response.ContentType, 'c');
+      axds.Submit('ContentLength',
+        ProcessandFormatContentSize(ResponseBody), 'c');
+      axds.Submit('Headers', IdHTTP.Response.RawHeaders.Text, 'c');
+      ExecutionTime := FormatTimeDifference(RequestStartTime, RequestEndTime);
+      axds.Submit('ExecutionTime', ExecutionTime, 'c');
+      axds.Submit('ErrorDetails', ErrorMsg, 'c');
+      axds.Submit('Endpoint', ExtractApiMethodName(IdHTTP.URL.URI), 'c');
+      axds.Submit('RequestMethod', UpperCase(RequestMethod), 'c');
+      axds.Submit('UserName', dbm.gf.username, 'c');
+      axds.Submit('AdditionalDetails', '', 'c');
+      axds.Submit('RequestID', sAPIRequestID, 'c');
+      axds.Post;
+    except
+      on E: Exception do
+      begin
+        dbm.gf.DoDebug.Log(dbm.gf.Axp_logstr +
+          '\uAPILoggingImpl\SaveHTTPResponseToDatabase - ' + E.Message);
+        dbm.gf.DoDebug.msg(E.Message);
+      end;
+    end;
+  finally
+    // finally
+  end;
+  dbm.gf.DoDebug.msg('SaveHTTPResponseToDatabase ends.');
+end;
+
+initialization
+
+// uAPILogging.FRequestHandler := TAPILoggingHandler.Create;
+
+finalization
+
+// uAPILogging.FRequestHandler := nil;
+
+end.

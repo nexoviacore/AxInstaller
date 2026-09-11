@@ -1,0 +1,810 @@
+unit uInstallUpdatesToRedis;
+
+interface
+
+uses
+  Windows,
+  SysUtils,
+  Classes,
+  IniFiles,
+  SyncObjs,
+  IdHTTP,
+  IdSSLOpenSSL,
+  IdStack;
+
+var
+  // Kept as a global variable as required.
+  Arm_Baseurl: string = '';
+  RedisApiUrl : string;
+
+procedure InitializeInstallUpdatesToRedis(
+  const AArmBaseUrl: string;
+  const AProjectName: string;
+  const AUserName: string;
+  const APackageName: string
+);
+
+procedure SetInstallUpdateContext(
+  const AProjectName: string;
+  const AUserName: string;
+  const APackageName: string
+);
+
+procedure SetArmBaseUrl(const ABaseUrl: string);
+
+procedure PushInstallUpdateToRedis(
+  const AAppName: string;
+  const ARedisKey: string;
+  const ARedisValue: string
+);
+
+procedure FinalizeInstallUpdatesToRedis;
+
+implementation
+uses
+uAxLog, uUtils;
+
+const
+  REDIS_KEY_EXPIRY_MINUTES = '720';
+  REDIS_WRITE_API_PATH = '/AxUtils/api/v1/AxRedisWrite';
+
+  HTTP_CONNECT_TIMEOUT_MS = 30000;
+  HTTP_READ_TIMEOUT_MS = 60000;
+  HTTP_MAX_RETRY_COUNT = 3;
+
+var
+  GHttpClient: TIdHTTP = nil;
+  GSslHandler: TIdSSLIOHandlerSocketOpenSSL = nil;
+  GHttpClientLock: TCriticalSection = nil;
+
+  GProjectName: string = '';
+  GUserName: string = '';
+  GPackageName: string = '';
+
+
+procedure LogMessage(const AMessage: string);
+begin
+  {
+    Replace this with your existing logger:
+
+      WriteLog(AMessage);
+
+    OutputDebugString is used here so this unit remains independent.
+  }
+//  OutputDebugString(
+//    PChar('[InstallUpdatesToRedis] ' + AMessage)
+//  );
+
+  WriteLog(AMessage);
+end;
+
+
+function TrimTrailingSlash(const AValue: string): string;
+begin
+  Result := Trim(AValue);
+
+  while (Length(Result) > 0) and
+        ((Result[Length(Result)] = '/') or
+         (Result[Length(Result)] = '\')) do
+  begin
+    Delete(Result, Length(Result), 1);
+  end;
+end;
+
+
+procedure SetArmBaseUrl(const ABaseUrl: string);
+begin
+  Arm_Baseurl := TrimTrailingSlash(ABaseUrl);
+
+  if Arm_Baseurl = '' then
+    raise Exception.Create(
+      'ARM Base Redis URL is empty.'
+    );
+
+  LogMessage(
+    'ARM Base URL configured: ' + Arm_Baseurl
+  );
+end;
+
+
+procedure LoadArmBaseUrlFromConfig(
+  const AConfigFilePath: string
+);
+var
+  IniFile: TIniFile;
+  SectionNames: TStringList;
+  SectionValues: TStringList;
+  SectionIndex: Integer;
+  BaseRedisUrl: string;
+begin
+  if Trim(AConfigFilePath) = '' then
+    raise Exception.Create(
+      'Config file path is empty.'
+    );
+
+  if not FileExists(AConfigFilePath) then
+    raise Exception.Create(
+      'Config file not found: ' + AConfigFilePath
+    );
+
+  IniFile := nil;
+  SectionNames := nil;
+  SectionValues := nil;
+
+  try
+    IniFile := TIniFile.Create(AConfigFilePath);
+    SectionNames := TStringList.Create;
+    SectionValues := TStringList.Create;
+
+    IniFile.ReadSections(SectionNames);
+
+    BaseRedisUrl := '';
+
+    {
+      Search every section so this unit does not depend on a fixed
+      section name.
+
+      Supported key names:
+        BaseRedisUrl
+        Baserediurl
+    }
+    for SectionIndex := 0 to SectionNames.Count - 1 do
+    begin
+      SectionValues.Clear;
+
+      IniFile.ReadSectionValues(
+        SectionNames[SectionIndex],
+        SectionValues
+      );
+
+      BaseRedisUrl :=
+        Trim(SectionValues.Values['BaseRedisUrl']);
+
+      if BaseRedisUrl = '' then
+        BaseRedisUrl :=
+          Trim(SectionValues.Values['Baserediurl']);
+
+      if BaseRedisUrl <> '' then
+        Break;
+    end;
+
+    if BaseRedisUrl = '' then
+      raise Exception.Create(
+        'BaseRedisUrl is not configured in: ' +
+        AConfigFilePath
+      );
+
+    SetArmBaseUrl(BaseRedisUrl);
+
+  finally
+    FreeAndNil(SectionValues);
+    FreeAndNil(SectionNames);
+    FreeAndNil(IniFile);
+  end;
+end;
+
+
+procedure SetInstallUpdateContext(
+  const AProjectName: string;
+  const AUserName: string;
+  const APackageName: string
+);
+begin
+  GProjectName := Trim(AProjectName);
+  GUserName := Trim(AUserName);
+  GPackageName := Trim(APackageName);
+
+  LogMessage(
+    'Install update context configured. ' +
+    'Project=' + GProjectName +
+    ', User=' + GUserName +
+    ', Package=' + GPackageName
+  );
+end;
+
+
+procedure InitializeHttpClient;
+begin
+  if Assigned(GHttpClient) then
+    Exit;
+
+  LogMessage('Initializing HTTP client...');
+
+  try
+    GHttpClient := TIdHTTP.Create(nil);
+
+    GSslHandler :=
+      TIdSSLIOHandlerSocketOpenSSL.Create(nil);
+
+    GSslHandler.SSLOptions.SSLVersions :=
+      [sslvTLSv1_2];
+
+    GHttpClient.IOHandler := GSslHandler;
+
+    GHttpClient.HandleRedirects := True;
+    GHttpClient.RedirectMaximum := 15;
+
+    GHttpClient.ConnectTimeout :=
+      HTTP_CONNECT_TIMEOUT_MS;
+
+    GHttpClient.ReadTimeout :=
+      HTTP_READ_TIMEOUT_MS;
+
+    GHttpClient.HTTPOptions :=
+      [hoForceEncodeParams];
+
+    GHttpClient.ProtocolVersion := pv1_1;
+
+    GHttpClient.Request.CharSet := 'utf-8';
+    GHttpClient.Request.CacheControl := 'no-cache';
+    GHttpClient.Request.Accept := 'application/json';
+    GHttpClient.Request.ContentType := 'application/json';
+    GHttpClient.Request.UserAgent := 'Axpert';
+
+    LogMessage(
+      'HTTP client initialized successfully.'
+    );
+
+  except
+    on E: Exception do
+    begin
+      LogMessage(
+        'Failed to initialize HTTP client. ' +
+        E.ClassName + ': ' + E.Message
+      );
+
+      FreeAndNil(GHttpClient);
+      FreeAndNil(GSslHandler);
+
+      raise;
+    end;
+  end;
+end;
+
+
+procedure ResetHttpClientConnection;
+begin
+  if not Assigned(GHttpClient) then
+    Exit;
+
+  LogMessage('Resetting HTTP connection...');
+
+  try
+    GHttpClient.Disconnect;
+  except
+    on E: Exception do
+      LogMessage(
+        'HTTP disconnect warning: ' +
+        E.ClassName + ': ' + E.Message
+      );
+  end;
+
+  try
+    if Assigned(GHttpClient.IOHandler) and
+       Assigned(GHttpClient.IOHandler.InputBuffer) then
+    begin
+      GHttpClient.IOHandler.InputBuffer.Clear;
+    end;
+  except
+    on E: Exception do
+      LogMessage(
+        'HTTP input buffer clear warning: ' +
+        E.ClassName + ': ' + E.Message
+      );
+  end;
+end;
+
+
+function EscapeJsonValue(
+  const AValue: string
+): string;
+var
+  CharIndex: Integer;
+  CurrentChar: Char;
+begin
+  Result := '';
+
+  for CharIndex := 1 to Length(AValue) do
+  begin
+    CurrentChar := AValue[CharIndex];
+
+    case CurrentChar of
+      '"':
+        Result := Result + '\"';
+
+      '\':
+        Result := Result + '\\';
+
+      #8:
+        Result := Result + '\b';
+
+      #9:
+        Result := Result + '\t';
+
+      #10:
+        Result := Result + '\n';
+
+      #12:
+        Result := Result + '\f';
+
+      #13:
+        Result := Result + '\r';
+    else
+      begin
+        if Ord(CurrentChar) < 32 then
+          Result :=
+            Result +
+            '\u' +
+            IntToHex(Ord(CurrentChar), 4)
+        else
+          Result := Result + CurrentChar;
+      end;
+    end;
+  end;
+end;
+
+
+function NormalizeJsonForValidation(
+  const AJson: string
+): string;
+begin
+  Result := LowerCase(AJson);
+
+  Result := StringReplace(
+    Result, ' ', '', [rfReplaceAll]
+  );
+
+  Result := StringReplace(
+    Result, #9, '', [rfReplaceAll]
+  );
+
+  Result := StringReplace(
+    Result, #13, '', [rfReplaceAll]
+  );
+
+  Result := StringReplace(
+    Result, #10, '', [rfReplaceAll]
+  );
+end;
+
+
+function BuildRedisWriteRequestJson(
+  const AAppName: string;
+  const ARedisKey: string;
+  const ARedisValue: string
+): string;
+begin
+  Result :=
+    '{' +
+      '"AccessCode":"' +
+        EscapeJsonValue(AAppName) + '",' +
+
+      '"InMemoryKey":"' +
+        EscapeJsonValue(ARedisKey) + '",' +
+
+      '"InMemoryValue":"' +
+        EscapeJsonValue(ARedisValue) + '",' +
+
+      '"IsBinary":"false",' +
+
+      '"KeyExpiryInMins":"' +
+        REDIS_KEY_EXPIRY_MINUTES + '"' +
+    '}';
+end;
+
+
+function ExecuteJsonPost(
+  const AUrl: string;
+  const ARequestJson: string
+): string;
+var
+  RequestStream: TStringStream;
+  ResponseStream: TStringStream;
+  AttemptNumber: Integer;
+  RetryDelayMs: Integer;
+begin
+  Result := '';
+
+  InitializeHttpClient;
+
+  for AttemptNumber := 1 to HTTP_MAX_RETRY_COUNT do
+  begin
+    RequestStream := nil;
+    ResponseStream := nil;
+
+    try
+      RequestStream :=
+        TStringStream.Create(
+          ARequestJson,
+          TEncoding.UTF8
+        );
+
+      ResponseStream :=
+        TStringStream.Create(
+          '',
+          TEncoding.UTF8
+        );
+
+      LogMessage(
+        'Calling Redis API. Attempt ' +
+        IntToStr(AttemptNumber) +
+        ' of ' +
+        IntToStr(HTTP_MAX_RETRY_COUNT)
+      );
+
+      LogMessage('URL: ' + AUrl);
+
+      try
+        GHttpClient.Post(
+          AUrl,
+          RequestStream,
+          ResponseStream
+        );
+
+        Result := ResponseStream.DataString;
+
+        LogMessage(
+          'Redis API call completed successfully.'
+        );
+
+        LogMessage(
+          'HTTP Status: ' +
+          IntToStr(GHttpClient.ResponseCode)
+        );
+
+        LogMessage(
+          'HTTP Description: ' +
+          GHttpClient.ResponseText
+        );
+
+        Exit;
+
+      except
+        on E: EIdHTTPProtocolException do
+        begin
+          LogMessage(
+            'Redis API HTTP error. Status=' +
+            IntToStr(E.ErrorCode) +
+            ', Message=' +
+            E.Message
+          );
+
+          if Trim(E.ErrorMessage) <> '' then
+            LogMessage(
+              'HTTP Error Response: ' +
+              E.ErrorMessage
+            );
+
+          {
+            HTTP 4xx/5xx errors are not retried here because
+            the server returned a valid HTTP response.
+          }
+          raise;
+        end;
+
+        on E: EIdSocketError do
+        begin
+          LogMessage(
+            'Redis API socket error #' +
+            IntToStr(E.LastError) +
+            ': ' +
+            E.Message
+          );
+
+          {
+            10054 = Connection reset by peer
+            10060 = Connection timed out
+          }
+          if (E.LastError = 10054) or
+             (E.LastError = 10060) then
+          begin
+            if AttemptNumber >= HTTP_MAX_RETRY_COUNT then
+            begin
+              LogMessage(
+                'Maximum HTTP retry count reached.'
+              );
+
+              raise;
+            end;
+
+            ResetHttpClientConnection;
+
+            RetryDelayMs :=
+              AttemptNumber * 2000;
+
+            LogMessage(
+              'Waiting ' +
+              IntToStr(RetryDelayMs) +
+              ' ms before retry.'
+            );
+
+            Sleep(RetryDelayMs);
+          end
+          else
+          begin
+            // Do not blindly retry unknown socket errors.
+            raise;
+          end;
+        end;
+
+        on E: Exception do
+        begin
+          LogMessage(
+            'Redis API call failed. ' +
+            E.ClassName + ': ' +
+            E.Message
+          );
+
+          raise;
+        end;
+      end;
+
+    finally
+      FreeAndNil(RequestStream);
+      FreeAndNil(ResponseStream);
+    end;
+  end;
+end;
+
+
+procedure ValidateRedisWriteResponse(
+  const AResponse: string
+);
+var
+  NormalizedResponse: string;
+begin
+  if Trim(AResponse) = '' then
+    raise Exception.Create(
+      'Empty response received from Redis Write API.'
+    );
+
+  NormalizedResponse :=
+    NormalizeJsonForValidation(AResponse);
+
+  if Pos(
+       '"success":false',
+       NormalizedResponse
+     ) > 0 then
+  begin
+    raise Exception.Create(
+      'Redis Write API returned failure: ' +
+      AResponse
+    );
+  end;
+end;
+
+
+procedure PushInstallUpdateToRedis(
+  const AAppName: string;
+  const ARedisKey: string;
+  const ARedisValue: string
+);
+var
+  EffectiveAppName: string;
+  EffectiveRedisKey: string;
+//  RedisApiUrl: string;
+  RequestJson: string;
+  ApiResponse: string;
+begin
+  if not Assigned(GHttpClientLock) then
+    GHttpClientLock := TCriticalSection.Create;
+
+  GHttpClientLock.Acquire;
+  try
+    LogMessage(
+      'PushInstallUpdateToRedis started.'
+    );
+
+    try
+      EffectiveAppName := Trim(AAppName);
+
+      {
+        Requirement:
+          If appname is empty, use connection.projectname.
+
+        The project name is supplied through
+        InitializeInstallUpdatesToRedis/SetInstallUpdateContext.
+      }
+      if EffectiveAppName = '' then
+        EffectiveAppName := GProjectName;
+
+      if EffectiveAppName = '' then
+        raise Exception.Create(
+          'Application name is empty.'
+        );
+
+      EffectiveRedisKey := Trim(ARedisKey);
+
+      {
+        Default key:
+          appname_username_packagename
+      }
+      if EffectiveRedisKey = '' then
+      begin
+        if GUserName = '' then
+          raise Exception.Create(
+            'User name is empty. ' +
+            'Cannot prepare default Redis key.'
+          );
+
+        if GPackageName = '' then
+          raise Exception.Create(
+            'Package name is empty. ' +
+            'Cannot prepare default Redis key.'
+          );
+
+        EffectiveRedisKey :=
+          EffectiveAppName + '_' +
+          GUserName + '_' +
+          ReplaceSpacesWithUnderscore(GPackageName);
+      end;
+
+      if Trim(ARedisValue) = '' then
+      begin
+        LogMessage(
+          'Redis value is empty. Redis push skipped.'
+        );
+
+        Exit;
+      end;
+
+      if Trim(Arm_Baseurl) = '' then
+        raise Exception.Create(
+          'ARM Base Redis URL is not configured.'
+        );
+
+      RedisApiUrl :=
+        TrimTrailingSlash(Arm_Baseurl) +
+        REDIS_WRITE_API_PATH;
+
+      RequestJson :=
+        BuildRedisWriteRequestJson(
+          EffectiveAppName,
+          EffectiveRedisKey,
+          ARedisValue
+        );
+
+      LogMessage(
+        'Preparing Redis write. ' +
+        'AccessCode=' + EffectiveAppName +
+        ', RedisKey=' + EffectiveRedisKey +
+        ', ValueLength=' +
+        IntToStr(Length(ARedisValue)) +
+        ', ExpiryMins=' +
+        REDIS_KEY_EXPIRY_MINUTES
+      );
+
+      {
+        ARedisValue and the complete request payload are intentionally
+        not logged because they may contain large or sensitive data.
+      }
+
+      ApiResponse :=
+        ExecuteJsonPost(
+          RedisApiUrl,
+          RequestJson
+        );
+
+      ValidateRedisWriteResponse(
+        ApiResponse
+      );
+
+      LogMessage(
+        'Install update pushed to Redis successfully. ' +
+        'RedisKey=' + EffectiveRedisKey '_' + ARedisValue);
+
+    except
+      on E: Exception do
+      begin
+        LogMessage(
+          'Failed to push install update to Redis. ' +
+          'RedisKey=' + EffectiveRedisKey +
+          ', Error=' +
+          E.ClassName + ': ' + E.Message
+        );
+
+        {
+          Current behavior:
+            Redis notification failure is logged and the
+            installation process can continue.
+
+          If Redis failure must stop installation, uncomment:
+
+            raise;
+        }
+      end;
+    end;
+
+    LogMessage(
+      'PushInstallUpdateToRedis completed.'
+    );
+
+  finally
+    GHttpClientLock.Release;
+  end;
+end;
+
+
+procedure InitializeInstallUpdatesToRedis(
+  const AArmBaseUrl: string;
+  const AProjectName: string;
+  const AUserName: string;
+  const APackageName: string
+);
+begin
+  if not Assigned(GHttpClientLock) then
+    GHttpClientLock := TCriticalSection.Create;
+
+  LogMessage(
+    'Initializing install updates to Redis...'
+  );
+
+//  LoadArmBaseUrlFromConfig(
+//    AConfigFilePath
+//  );
+  if AArmBaseUrl = '' then
+    LogMessage('ARMBaseUrl is not configured');
+  SetArmBaseUrl(AArmBaseUrl);
+  RedisApiUrl :=
+        TrimTrailingSlash(AArmBaseUrl) +
+        REDIS_WRITE_API_PATH;
+
+  SetInstallUpdateContext(
+    AProjectName,
+    AUserName,
+    APackageName
+  );
+
+  // Create once and reuse for all Redis API calls.
+  InitializeHttpClient;
+
+  LogMessage(
+    'Install updates to Redis initialized successfully.'
+  );
+end;
+
+
+procedure FinalizeInstallUpdatesToRedis;
+begin
+  LogMessage(
+    'Finalizing install updates to Redis...'
+  );
+
+  try
+    if Assigned(GHttpClient) then
+      GHttpClient.Disconnect;
+  except
+    on E: Exception do
+      LogMessage(
+        'HTTP disconnect during finalization warning: ' +
+        E.Message
+      );
+  end;
+
+  FreeAndNil(GHttpClient);
+  FreeAndNil(GSslHandler);
+
+  GProjectName := '';
+  GUserName := '';
+  GPackageName := '';
+  Arm_Baseurl := '';
+
+  LogMessage(
+    'Install updates to Redis finalized.'
+  );
+end;
+
+
+initialization
+  GHttpClientLock := TCriticalSection.Create;
+
+finalization
+  try
+    FinalizeInstallUpdatesToRedis;
+  except
+    // Never allow an exception to escape unit finalization.
+  end;
+
+  FreeAndNil(GHttpClientLock);
+
+end.

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+<trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+<security>
+<requestedPrivileges>
+<requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+</requestedPrivileges>
+</security>
+</trustInfo>
+<assemblyIdentity version="1.0.0.0" processorArchitecture="X86" name="AxInstaller" type="win32"/>
+<description>AxInstaller - Patch and Plugin Installer</description>
+<dependency>
+<dependentAssembly>
+<assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+</dependentAssembly>
+</dependency>
+<compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+<application>
+<!-- Windows 10 -->
+<supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+<!-- Windows 8.1 -->
+<supportedOS Id="{4d5308ef-2e65-4e7a-9817-98eec8c4ab37}"/>
+<!-- Windows 8 -->
+<supportedOS Id="{1e0484e0-15ff-4f35-8228-6a6f5c6d5040}"/>
+<!-- Windows 7 -->
+<supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+<!-- Windows Vista -->
+<supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/>
+<!-- Windows XP -->
+<supportedOS Id="{1a8a4186-d99a-4b4b-8f73-9261695c5f49}"/>
+</application>
+</compatibility>
+</assembly>
+ 

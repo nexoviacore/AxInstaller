@@ -1604,6 +1604,7 @@ begin
                               selectedversion := splitedversion;
                               // versionarray[I];
                               selectedpatch := Patcharray[Y];
+                              patchOrPlugin := 'Release';
                               appwriteln;
                               appwriteln
                                 (Uppercase('Installing ' + Patcharray[Y]));
@@ -1737,6 +1738,7 @@ begin
                           begin
                             selectedversion := splitedversion;
                             selectedpatch := Patcharray[Y];
+                            patchOrPlugin := 'Release';
                             appwriteln;
                             appwriteln
                               (Uppercase('Installing ' + Patcharray[Y]));
@@ -1921,6 +1923,7 @@ begin
                                 selectedversion := splitedversion;
                                 // versionarray[I];
                                 selectedpatch := Patcharray[T];
+                                patchOrPlugin := 'Release';
                                 appwriteln;
                                 appwriteln
                                   (Uppercase('Installing ' + Patcharray[T]));
@@ -2050,6 +2053,7 @@ begin
                               appwriteln;
                               selectedversion := splitedversion;
                               selectedpatch := Patcharray[T];
+                              patchOrPlugin := 'Release';
                               appwriteln;
                               appwriteln
                                 (Uppercase('Installing ' + Patcharray[T]));
@@ -2361,6 +2365,7 @@ begin
                       begin
                         selectedversion := splitedversion; // versionarray[I];
                         selectedpatch := Patcharray[Y];
+                        patchOrPlugin := 'Release';
                         appwriteln;
                         appwriteln(Uppercase('Installing ' + Patcharray[Y]));
                         appwriteln('==============================');
@@ -2604,6 +2609,7 @@ begin
                           currentPatchname, 10);
                         appwriteln;
                         appwriteln;
+                        patchOrPlugin := 'Release';
                         selectedversion := splitedversion; // versionarray[I];
                         selectedpatch := Patcharray[T];
                         appwriteln;

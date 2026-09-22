@@ -5,7 +5,7 @@
         <FrameworkType>VCL</FrameworkType>
         <MainSource>AxInstallerRest.dpr</MainSource>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Library</AppType>
@@ -113,25 +113,30 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <DCC_DebugInformation>0</DCC_DebugInformation>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-        <DCC_UnitSearchPath>E:\Axpert\__Supporting Files\__Supporting Files\REDIS CLIENT - DELPHI XE3 Support;E:\Axpert\__Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17x64;E:\Axpert\__Supporting Files\__Supporting Files\PowerPDFXe3;E:\Axpert\__Supporting Files\__Supporting Files\PNGComponents-master;E:\Axpert\__Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Core;E:\Axpert\__Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\System;E:\Axpert\__Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Protocols;E:\Axpert\__Supporting Files\__Supporting Files\Devart;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_DebugInformation>false</DCC_DebugInformation>
+        <VerInfo_MajorVer>11</VerInfo_MajorVer>
+        <VerInfo_MinorVer>4</VerInfo_MinorVer>
+        <DCC_UnitSearchPath>D:\Supporting Files\__Supporting Files\PNGComponents-master\Source;D:\Supporting Files\__Supporting Files\PowerPDFXe3;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\System;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Protocols;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Core;D:\Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17;C:\Program Files (x86)\Devart\Dbx\MySql\Lib\Delphi17\Win32;C:\Program Files (x86)\Devart\dbExpress\PostgreSql\Lib\Delphi17\Win32;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <Manifest_File>None</Manifest_File>
-        <DCC_Define>ForService;$(DCC_Define)</DCC_Define>
-        <DCC_DcuOutput>E:\AxInstaller\AxInstallerRest-WithLatestChanges\AxInstallerRest\UnitOutput\</DCC_DcuOutput>
-        <DCC_ExeOutput>E:\AxInstaller\AxInstallerRest-WithLatestChanges\AxInstallerRest\Output\win32\</DCC_ExeOutput>
-        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (32 Bit) (IR22072026);FileVersion=1.0.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=1.0.0.0;Comments=32Bit (IR22072026);ProgramID=com.embarcadero.$(ModuleName)</VerInfo_Keys>
+        <DCC_Define>AXINSTALLER_REST_MODE;ForService;ForAxInstaller;withsmtp;NotForRestDLL;DEBUG;$(DCC_Define)</DCC_Define>
+        <DCC_DcuOutput>D:\AxInsGIT-Output\Release\REST DLL\32Bit\dcus</DCC_DcuOutput>
+        <DCC_ExeOutput>D:\AxInsGIT-Output\Release\REST DLL\32Bit</DCC_ExeOutput>
+        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (32 Bit) (IR16092026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=32Bit (IR16092026);ProgramID=com.embarcadero.$(ModuleName)</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
+        <VerInfo_MajorVer>11</VerInfo_MajorVer>
+        <VerInfo_MinorVer>4</VerInfo_MinorVer>
         <DCC_DebugInformation>false</DCC_DebugInformation>
-        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (64 Bit) (IR31082026);FileVersion=1.0.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=1.0.0.0;Comments=64Bit (IR31082026);ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (64 Bit) (IR16092026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=64Bit (IR16092026);ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
         <DCC_Define>AXINSTALLER_REST_MODE;ForService;ForAxInstaller;withsmtp;NotForRestDLL;DEBUG;$(DCC_Define)</DCC_Define>
-        <DCC_ExeOutput>D:\AxInstallerRest - Copy\ReleaseOutput\RestDLL\64Bit</DCC_ExeOutput>
+        <DCC_ExeOutput>D:\AxInsGIT-Output\Release\REST DLL\64Bit</DCC_ExeOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <Manifest_File>None</Manifest_File>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UnitSearchPath>D:\Supporting Files\__Supporting Files\PNGComponents-master\Source;D:\Supporting Files\__Supporting Files\PowerPDFXe3;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\System;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Protocols;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Core;C:\Program Files (x86)\Devart\dbExpress\PostgreSql\Lib\Delphi17\Win64;D:\Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17x64;C:\Program Files (x86)\Devart\Dbx\MySql\Lib\Delphi17\Win64;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-        <DCC_DcuOutput>D:\AxInstallerRest - Copy\ReleaseOutput\RestDLL\64Bit\Dcus</DCC_DcuOutput>
+        <DCC_DcuOutput>D:\AxInsGIT-Output\Release\REST DLL\64Bit\dcus</DCC_DcuOutput>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
@@ -340,6 +345,8 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Source Name="MainSource">AxInstallerRest.dpr</Source>
                 </Source>
                 <Excluded_Packages>
+                    <Excluded_Packages Name="D:\Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17\dclfsBDE17.bpl">FastScript 1.9 BDE Components</Excluded_Packages>
+                    <Excluded_Packages Name="D:\Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17\dclfrxDB17.bpl">FastReport VCL DB Components</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dcloffice2k170.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dclofficexp170.bpl">Microsoft Office XP Sample Automation Server Wrapper Components</Excluded_Packages>
                 </Excluded_Packages>
@@ -381,10 +388,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -427,10 +434,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -438,10 +445,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -467,10 +474,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -547,10 +554,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -577,10 +584,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -624,10 +631,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -667,10 +674,10 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSDevice64">
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
-                    <Platform Name="iOSSimulator">
+                    <Platform Name="iOSDevice64">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -699,13 +706,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Android" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
             </Deployment>
             <Platforms>
@@ -723,7 +730,7 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win64'">
@@ -731,7 +738,7 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win32'">
@@ -739,7 +746,7 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win64'">
@@ -747,7 +754,7 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
 </Project>

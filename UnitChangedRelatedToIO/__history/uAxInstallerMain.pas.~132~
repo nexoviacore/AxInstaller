@@ -808,7 +808,6 @@ begin
         Command := ReadInput;
         parseCommand(Command);
 {$ENDIF}
-
       end
       else if (Pos('echo', lowercase(Command)) <> 0) then
       begin
@@ -1605,6 +1604,7 @@ begin
                               selectedversion := splitedversion;
                               // versionarray[I];
                               selectedpatch := Patcharray[Y];
+                              patchOrPlugin := 'Release'
                               appwriteln;
                               appwriteln
                                 (Uppercase('Installing ' + Patcharray[Y]));
@@ -2605,13 +2605,14 @@ begin
                           currentPatchname, 10);
                         appwriteln;
                         appwriteln;
+                        patchOrPlugin := 'Release';
                         selectedversion := splitedversion; // versionarray[I];
                         selectedpatch := Patcharray[T];
                         appwriteln;
                         appwriteln(Uppercase('Installing ' + Patcharray[T]));
                         appwriteln('==============================');
                         appwriteln;
-                        HandleStructureInstallation(Patcharray[T]);
+                        HandleStructureInstallation(selectedpatch);
                         if connectionstatus then
                         begin
                           // commandstrlist := TStringList.Create;

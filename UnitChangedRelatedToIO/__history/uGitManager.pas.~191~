@@ -1,3 +1,4 @@
+//Git Manager
 unit uGitManager;
 
 interface
@@ -401,10 +402,12 @@ begin
       IntToStr(GitConnectTimeoutMs) + 'ms, read-timeout=' +
       IntToStr(GitReadTimeoutMs) + 'ms');
     try
+      writegitlog('Checking File Existence: ' +TempFileName);
       if FileExists(TempFileName) and not DeleteFile(TempFileName) then
         RaiseLastOSError;
 
       FileStream := TFileStream.create(TempFileName, fmCreate);
+      writegitlog('Calling IdHttp1.Get');
       IdHttp1.Get(URL, FileStream);
       Result := FileStream.Size;
       FreeAndNil(FileStream);
@@ -412,6 +415,7 @@ begin
       if Result = 0 then
         raise Exception.create('Zero size file found.');
 
+      writegitlog('Initiating MoveFileEX ');
       if not MoveFileEx(PChar(TempFileName), PChar(FileName),
         MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
         RaiseLastOSError;
@@ -2153,7 +2157,7 @@ begin
                 (depending on the Git provider and authentication method). *)
 
               if IsRetryableHttpError(E.ErrorCode) or
-                (lowercase(errmsg) = 'Read timed out') then
+                (lowercase(errmsg) = 'read timed out') then
               begin
                 try
                   errmsg := '';
@@ -2306,7 +2310,7 @@ begin
                 (depending on the Git provider and authentication method). *)
 
               if IsRetryableHttpError(E.ErrorCode) or
-                (lowercase(errmsg) = 'Read timed out') then
+                (lowercase(errmsg) = 'read timed out') then
               begin
                 try
                   errmsg := '';
@@ -2573,7 +2577,7 @@ begin
                     (depending on the Git provider and authentication method). *)
 
                   if IsRetryableHttpError(E.ErrorCode) or
-                    (lowercase(errmsg) = 'Read timed out') then
+                    (lowercase(errmsg) = 'read timed out') then
                   begin
                     try
                       errmsg := '';
@@ -2698,7 +2702,7 @@ begin
                 begin
                   if (Pos('ssl routines', lowercase(errmsg)) > 0) or
                     (lowercase(errmsg) = 'zero size file found.') or
-                    (lowercase(errmsg) = 'Read timed out') then
+                    (lowercase(errmsg) = 'read timed out') then
                   begin
                     try
                       errmsg := '';

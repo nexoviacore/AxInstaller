@@ -793,6 +793,8 @@ begin
       slUserInstructions.clear;
       IsPackageInstall := False;
       bGitPullIncomplete := False; // Pull completed successfully
+      writelog('');
+      writelog('Executing Command : ' +Command);
       if Command = '' then
       begin
         // appwriteln('AxInstaller> ');
@@ -2602,6 +2604,7 @@ begin
                           currentPatchname, 10);
                         appwriteln;
                         appwriteln;
+                        patchOrPlugin := 'Release';
                         selectedversion := splitedversion; // versionarray[I];
                         selectedpatch := Patcharray[T];
                         appwriteln;

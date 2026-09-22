@@ -1,3 +1,4 @@
+// Git Manager
 unit uGitManager;
 
 interface
@@ -278,8 +279,8 @@ begin
     // GitHub can report secondary rate limiting as 403. Retry only when the
     // server gives an explicit delay; a normal 403 and an exhausted hourly
     // quota must not be hammered by short retries.
-    if (ErrorCode = 403) and Assigned(IdHttp1) and
-      Assigned(IdHttp1.Response) then
+    if (ErrorCode = 403) and Assigned(IdHttp1) and Assigned(IdHttp1.Response)
+    then
     begin
       RetryAfter := IdHttp1.Response.RawHeaders.Values['Retry-After'];
       Result := RetryAfter <> '';
@@ -326,11 +327,10 @@ begin
   begin
     ResetIdHttpReqObj;
     StartedAt := GetTickCount;
-    WriteGitLog('Git request start. URL=' + SafeURLForLog(URL) +
-      ', attempt=' + IntToStr(AttemptNumber) + '/' +
-      IntToStr(MaxGitRequestAttempts) + ', connect-timeout=' +
-      IntToStr(GitConnectTimeoutMs) + 'ms, read-timeout=' +
-      IntToStr(GitReadTimeoutMs) + 'ms');
+    WriteGitLog('Git request start. URL=' + SafeURLForLog(URL) + ', attempt=' +
+      IntToStr(AttemptNumber) + '/' + IntToStr(MaxGitRequestAttempts) +
+      ', connect-timeout=' + IntToStr(GitConnectTimeoutMs) + 'ms, read-timeout='
+      + IntToStr(GitReadTimeoutMs) + 'ms');
     try
       Result := IdHttp1.Get(URL);
       WriteGitLog('Git request success. URL=' + SafeURLForLog(URL) +
@@ -346,27 +346,26 @@ begin
           IntToStr(Cardinal(GetTickCount - StartedAt)) + 'ms, exception=' +
           E.ClassName + ', message=' + E.Message);
         if E is EIdSocketError then
-          WriteGitLog('Git socket error code=' +
-            IntToStr(EIdSocketError(E).LastError))
+          WriteGitLog('Git socket error code=' + IntToStr(EIdSocketError(E)
+            .LastError))
         else if E is EIdHTTPProtocolException then
         begin
-          WriteGitLog('Git HTTP status=' +
-            IntToStr(EIdHTTPProtocolException(E).ErrorCode));
+          WriteGitLog('Git HTTP status=' + IntToStr(EIdHTTPProtocolException(E)
+            .ErrorCode));
           if Assigned(IdHttp1.Response) then
             WriteGitLog('Git rate limit. remaining=' +
               IdHttp1.Response.RawHeaders.Values['X-RateLimit-Remaining'] +
-              ', reset=' +
-              IdHttp1.Response.RawHeaders.Values['X-RateLimit-Reset'] +
-              ', retry-after=' +
+              ', reset=' + IdHttp1.Response.RawHeaders.Values
+              ['X-RateLimit-Reset'] + ', retry-after=' +
               IdHttp1.Response.RawHeaders.Values['Retry-After']);
         end;
 
         if (AttemptNumber = MaxGitRequestAttempts) or
           not IsRetryableRequestError(E) then
         begin
-          WriteGitLog('Git request final failure. URL=' +
-            SafeURLForLog(URL) + ', attempts=' + IntToStr(AttemptNumber));
-          raise EGitRequestFailed.Create(E.ClassName + ': ' + E.Message);
+          WriteGitLog('Git request final failure. URL=' + SafeURLForLog(URL) +
+            ', attempts=' + IntToStr(AttemptNumber));
+          raise EGitRequestFailed.create(E.ClassName + ': ' + E.Message);
         end;
 
         RetryDelayMs := GetRetryDelayMs(AttemptNumber);
@@ -395,67 +394,96 @@ begin
     ResetIdHttpReqObj;
     FileStream := nil;
     StartedAt := GetTickCount;
-    WriteGitLog('Git download start. URL=' + SafeURLForLog(URL) +
-      ', file=' + FileName + ', attempt=' + IntToStr(AttemptNumber) + '/' +
+    WriteGitLog('Git download start. URL=' + SafeURLForLog(URL) + ', file=' +
+      FileName + ', attempt=' + IntToStr(AttemptNumber) + '/' +
       IntToStr(MaxGitRequestAttempts) + ', connect-timeout=' +
       IntToStr(GitConnectTimeoutMs) + 'ms, read-timeout=' +
       IntToStr(GitReadTimeoutMs) + 'ms');
     try
+      WriteGitLog('Checking File Existence: ' + TempFileName);
       if FileExists(TempFileName) and not DeleteFile(TempFileName) then
         RaiseLastOSError;
 
       FileStream := TFileStream.create(TempFileName, fmCreate);
+      WriteGitLog('Calling IdHttp1.Get');
       IdHttp1.Get(URL, FileStream);
       Result := FileStream.Size;
-      FreeAndNil(FileStream);
+      freeandnil(FileStream);
 
       if Result = 0 then
         raise Exception.create('Zero size file found.');
 
-      if not MoveFileEx(PChar(TempFileName), PChar(FileName),
-        MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
-        RaiseLastOSError;
+      WriteGitLog('Initiating MoveFileEX ');
+      // if not MoveFileEx(PChar(TempFileName), PChar(FileName),
+      // MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
+      // begin
+      // writegitlog('Raising Last OS Error');
+      // RaiseLastOSError;
+      // end;
+      try
+        WriteLog('Initiating MoveFileEx');
+        WriteLog('Source: ' + TempFileName);
+        WriteLog('Destination: ' + FileName);
 
-      WriteGitLog('Git download success. URL=' + SafeURLForLog(URL) +
-        ', file=' + FileName + ', attempt=' + IntToStr(AttemptNumber) +
-        ', elapsed=' + IntToStr(Cardinal(GetTickCount - StartedAt)) +
-        'ms, HTTP=' + IntToStr(IdHttp1.ResponseCode) + ', bytes=' +
-        IntToStr(Result));
+        if not MoveFileEx(PChar(TempFileName), PChar(FileName),
+          MOVEFILE_REPLACE_EXISTING or MOVEFILE_WRITE_THROUGH) then
+        begin
+          var
+          ErrCode := GetLastError;
+
+          WriteLog(Format('MoveFileEx failed. ErrorCode=%d, Error=%s',
+            [ErrCode, SysErrorMessage(ErrCode)]));
+
+          RaiseLastOSError;
+        end;
+
+        WriteLog('MoveFileEx completed successfully');
+
+      except
+        on E: Exception do
+        begin
+          WriteLog('Exception: ' + E.ClassName);
+          WriteLog('Message: ' + E.Message);
+          raise;
+        end;
+      end;
+      WriteGitLog('Git download success. URL=' + SafeURLForLog(URL) + ', file='
+        + FileName + ', attempt=' + IntToStr(AttemptNumber) + ', elapsed=' +
+        IntToStr(Cardinal(GetTickCount - StartedAt)) + 'ms, HTTP=' +
+        IntToStr(IdHttp1.ResponseCode) + ', bytes=' + IntToStr(Result));
       Exit;
     except
       on E: Exception do
       begin
-        FreeAndNil(FileStream);
+        freeandnil(FileStream);
         if FileExists(TempFileName) and not DeleteFile(TempFileName) then
           WriteGitLog('Unable to remove partial download: ' + TempFileName);
 
-        WriteGitLog('Git download failed. URL=' + SafeURLForLog(URL) +
-          ', file=' + FileName + ', attempt=' + IntToStr(AttemptNumber) +
-          ', elapsed=' + IntToStr(Cardinal(GetTickCount - StartedAt)) +
-          'ms, exception=' + E.ClassName + ', message=' + E.Message);
+        WriteGitLog('Git download failed. URL=' + SafeURLForLog(URL) + ', file='
+          + FileName + ', attempt=' + IntToStr(AttemptNumber) + ', elapsed=' +
+          IntToStr(Cardinal(GetTickCount - StartedAt)) + 'ms, exception=' +
+          E.ClassName + ', message=' + E.Message);
         if E is EIdSocketError then
-          WriteGitLog('Git socket error code=' +
-            IntToStr(EIdSocketError(E).LastError))
+          WriteGitLog('Git socket error code=' + IntToStr(EIdSocketError(E)
+            .LastError))
         else if E is EIdHTTPProtocolException then
         begin
-          WriteGitLog('Git HTTP status=' +
-            IntToStr(EIdHTTPProtocolException(E).ErrorCode));
+          WriteGitLog('Git HTTP status=' + IntToStr(EIdHTTPProtocolException(E)
+            .ErrorCode));
           if Assigned(IdHttp1.Response) then
             WriteGitLog('Git rate limit. remaining=' +
               IdHttp1.Response.RawHeaders.Values['X-RateLimit-Remaining'] +
-              ', reset=' +
-              IdHttp1.Response.RawHeaders.Values['X-RateLimit-Reset'] +
-              ', retry-after=' +
+              ', reset=' + IdHttp1.Response.RawHeaders.Values
+              ['X-RateLimit-Reset'] + ', retry-after=' +
               IdHttp1.Response.RawHeaders.Values['Retry-After']);
         end;
 
         if (AttemptNumber = MaxGitRequestAttempts) or
           not IsRetryableRequestError(E) then
         begin
-          WriteGitLog('Git download final failure. URL=' +
-            SafeURLForLog(URL) + ', file=' + FileName + ', attempts=' +
-            IntToStr(AttemptNumber));
-          raise EGitRequestFailed.Create(E.ClassName + ': ' + E.Message);
+          WriteGitLog('Git download final failure. URL=' + SafeURLForLog(URL) +
+            ', file=' + FileName + ', attempts=' + IntToStr(AttemptNumber));
+          raise EGitRequestFailed.create(E.ClassName + ': ' + E.Message);
         end;
 
         RetryDelayMs := GetRetryDelayMs(AttemptNumber);
@@ -514,7 +542,7 @@ var
 begin
   try
     WriteLog('createPluginArray function started..');
-    //ResetIdHttpReqObj;
+    // ResetIdHttpReqObj;
     // IdHTTP1 := TIdHTTP.Create(nil);
     // SSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(IdHTTP1);
     // // SSLIOHandler.SSLOptions.SSLVersions := [sslvTLSv1_2];
@@ -564,7 +592,7 @@ begin
       end;
     end;
     JsonArray := TJSONObject.ParseJSONValue(JSONGet) as TJSONArray;
-    Jcount := JsonArray.size;
+    Jcount := JsonArray.Size;
     SetLength(pluginarray, Jcount);
     for I := 0 to Jcount - 1 do
     begin
@@ -573,7 +601,7 @@ begin
       NameValue := JObject.Get(KeyName).JSONValue.value;
       pluginarray[I] := NameValue;
       // Skip .gitattributes (add more files if needed)
-      if lowercase(NameValue) = '.gitattributes' then
+      if LowerCase(NameValue) = '.gitattributes' then
         Continue;
       // Appwriteln(PluginArray[I]);
     end;
@@ -602,7 +630,7 @@ var
 begin
   try
     WriteLog('createVersionArray function started..');
-    //ResetIdHttpReqObj;
+    // ResetIdHttpReqObj;
     // IdHTTP1 := TIdHTTP.Create(nil);
     // // initConnection();
     // SSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(IdHTTP1);
@@ -652,7 +680,7 @@ begin
       end;
     end;
     JsonArray := TJSONObject.ParseJSONValue(JSONGet) as TJSONArray;
-    Jcount := JsonArray.size;
+    Jcount := JsonArray.Size;
     SetLength(versionarray, Jcount);
 
     ActualCount := 0; // Track valid entries
@@ -710,7 +738,7 @@ var
 begin
   try
     WriteLog('createPatchArray function started..');
-    //ResetIdHttpReqObj;
+    // ResetIdHttpReqObj;
     // IdHTTP1 := TIdHTTP.Create(nil);
     // // initConnection();
     // SSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(IdHTTP1);
@@ -738,10 +766,10 @@ begin
 
     // Appwriteln('Invoking URL :' + GitURL);
     // IdHTTP1.HandleRedirects := True;
-    versionnumber := trim(currentversionname);
+    versionnumber := Trim(currentversionname);
     for Z := Low(versionarray) to High(versionarray) do
     begin
-      if lowercase(versionarray[Z]) = lowercase(versionnumber) then
+      if LowerCase(versionarray[Z]) = LowerCase(versionnumber) then
       begin
         try
           GithubUrl := TidUri.URLEncode(GitURL + versionarray[Z] { version } );
@@ -765,7 +793,7 @@ begin
           end;
         end;
         JsonArray := TJSONObject.ParseJSONValue(JSONGet) as TJSONArray;
-        Jcount := JsonArray.size;
+        Jcount := JsonArray.Size;
         SetLength(Arr, Jcount);
         ActualCount := 0; // Track valid entries
 
@@ -782,7 +810,7 @@ begin
           // we can also check starts with 'Version ' and skip if not
           // Only include items that start with 'Version '
           if (not StartsText('Release', NameValue)) and
-            (lowercase(NameValue) <> 'basecode') then
+            (LowerCase(NameValue) <> 'basecode') then
             Continue;
           Arr[ActualCount] := NameValue;
           Inc(ActualCount);
@@ -930,7 +958,7 @@ begin
       patarray[I + PatArraysize] := version + '/' + 'BaseCode' // 'main'
     else
       patarray[I + PatArraysize] := version + '/' + 'Release' +
-        inttostr(ptcArray[I]);
+        IntToStr(ptcArray[I]);
   end;
   SetLength(ptcArray, 0);
   WriteLog('sortarray function ends..');
@@ -947,12 +975,12 @@ begin
   // commandstrlist.Delimitedtext := patchname;
   // Patchstr:=commandstrlist[1];
   // freeandnil(commandstrlist);
-  if lowercase(patchname) = 'basecode' then
+  if LowerCase(patchname) = 'basecode' then
     Patchstr := ''
   else
   begin
-    Patchstr := copy(patchname, length('Release') + 1, length(patchname));
-    Patchstr := trim(Patchstr);
+    Patchstr := Copy(patchname, length('Release') + 1, length(patchname));
+    Patchstr := Trim(Patchstr);
   end;
   // /patchstr:=trim(patchstr);
   if Patchstr = '' then
@@ -987,7 +1015,7 @@ begin
 
   // Extract the substring after the last '/'
   if SlashPos > 0 then
-    PatchNumberStr := copy(patch, SlashPos + 1, length(patch) - SlashPos)
+    PatchNumberStr := Copy(patch, SlashPos + 1, length(patch) - SlashPos)
   else
     PatchNumberStr := patch; // If no '/', take the whole string as the number
 
@@ -1070,12 +1098,12 @@ begin
 
   // Extract prefixes (everything before the first '/')
   if SlashPosLeft > 0 then
-    PrefixLeft := copy(Left, 1, SlashPosLeft - 1)
+    PrefixLeft := Copy(Left, 1, SlashPosLeft - 1)
   else
     PrefixLeft := Left; // If no '/', take the whole string as prefix
 
   if SlashPosRight > 0 then
-    PrefixRight := copy(Right, 1, SlashPosRight - 1)
+    PrefixRight := Copy(Right, 1, SlashPosRight - 1)
   else
     PrefixRight := Right; // If no '/', take the whole string as prefix
 
@@ -1142,7 +1170,7 @@ begin
     WriteLog('listing available versions to install');
     for I := Low(versionarray) to High(versionarray) do
     begin
-      if lowercase(currentversionname) = lowercase(versionarray[I]) then
+      if LowerCase(currentversionname) = LowerCase(versionarray[I]) then
       begin
         currentindex := I;
         break;
@@ -1241,7 +1269,7 @@ begin
         /// /      console_write(IntToStr(I + 1) + '. ', 12);
         /// /      AppWriteln(PatchArray[I]); // pluginarray[I]
         // // SetConsoleTextAttribute(inttostr(I+1)+'. ', 4);
-        patchstrlist.Add(inttostr(I + 1) + '=' + patcharray[I]);
+        patchstrlist.Add(IntToStr(I + 1) + '=' + patcharray[I]);
         // pluginarray[I]
       end;
       WriteLog('listing available releases to install');
@@ -1269,7 +1297,7 @@ begin
         patchindex := findindex(versionwisearray, selectedversion + '/' +
           'basecode' { 'main' } );
 
-      if not(lowercase(selectedversion) = lowercase(currentversionname)) then
+      if not(LowerCase(selectedversion) = LowerCase(currentversionname)) then
       begin
         for I := Low(versionwisearray) to High(versionwisearray) do
         begin
@@ -1428,12 +1456,12 @@ begin
   Found := False;
   for I := Low(MyArray) to High(MyArray) do
   begin
-    if (lowercase(Mystring) = 'patch0') or (lowercase(Mystring) = '') then
+    if (LowerCase(Mystring) = 'patch0') or (LowerCase(Mystring) = '') then
     begin
       Result := -1;
       break;
     end
-    else if lowercase(MyArray[I]) = lowercase(Mystring) then
+    else if LowerCase(MyArray[I]) = LowerCase(Mystring) then
     begin
       Index := I;
       Found := True;
@@ -1473,10 +1501,10 @@ begin
         // JObject := JsonArray.Get(I) as TJSONObject;
         // NameValue := JObject.Get(keyName).JSONValue.value;
         // PluginArray[I] := NameValue;
-        console_write(inttostr(I + 1) + '. ', 12);
+        console_write(IntToStr(I + 1) + '. ', 12);
         Appwriteln(pluginarray[I]); // pluginarray[I]
         // SetConsoleTextAttribute(inttostr(I+1)+'. ', 4);
-        pluginstrlist.Add(inttostr(I + 1) + '=' + pluginarray[I]);
+        pluginstrlist.Add(IntToStr(I + 1) + '=' + pluginarray[I]);
         // pluginarray[I]
       end;
       WriteLog('PluginArray displayed..');
@@ -1579,12 +1607,12 @@ begin
 
     // New code for checking plugin
     IDX := 0;
-    if (pluginstrlist.IndexOfName(inttostr(PluginIdx))) >= 0 then
+    if (pluginstrlist.IndexOfName(IntToStr(PluginIdx))) >= 0 then
     begin
       Inc(IDX);
       selectedPlugin := pluginstrlist.ValueFromIndex[PluginIdx - 1];
       // strlist starts index from 0
-      console_write(inttostr(IDX) + '. ', 12);
+      console_write(IntToStr(IDX) + '. ', 12);
       AppWrite(selectedPlugin);
       Appwriteln;
       Appwriteln;
@@ -1598,7 +1626,7 @@ begin
       Appwriteln;
       AppReadln(Response);
       Appwriteln;
-      if lowercase(Response) = 'y' then
+      if LowerCase(Response) = 'y' then
       begin
         // ISFound:=True;
         // AppWriteln('PLUGIN INSTALLATION PROCESS');
@@ -1618,7 +1646,7 @@ begin
         // Result:=pluginstrlist.ValueFromIndex[I];
         pullfromgit();
       end;
-      if lowercase(Response) = 'n' then
+      if LowerCase(Response) = 'n' then
       begin
         Appwriteln('Installation aborted...');
         WriteLog('Plugin installation aborted...');
@@ -1626,19 +1654,19 @@ begin
         listOfPlugins();
       end
     end;
-    if (lowercase(Response) <> 'y') and (lowercase(Response) <> 'n') then
+    if (LowerCase(Response) <> 'y') and (LowerCase(Response) <> 'n') then
     begin
       repeat
       begin
         Appwriteln('Give response in y or n only ');
         AppReadln(Response);
       end;
-      until (lowercase(Response) = 'y') or (lowercase(Response) = 'n');
-      if lowercase(Response) = 'y' then
+      until (LowerCase(Response) = 'y') or (LowerCase(Response) = 'n');
+      if LowerCase(Response) = 'y' then
       begin
         pullfromgit();
       end;
-      if lowercase(Response) = 'n' then
+      if LowerCase(Response) = 'n' then
       begin
         listOfPlugins();
       end;
@@ -1698,7 +1726,7 @@ begin
       commandstrlist.Delimitedtext := selectedPatch;
       selectedversion := commandstrlist[0] + ' ' + commandstrlist[1];
       patch := commandstrlist[2];
-      commandstrlist.free;
+      commandstrlist.Free;
 
       WriteLog('Pulling AxpertStructures for Patch from GIT');
       Appwriteln('PATCH INSTALLATION PROCESS');
@@ -1733,7 +1761,7 @@ begin
       CreateFolderStructure((GitPatchURL + selectedversion + '/' + patch),
         'AxpertWeb/AxpertStructures');
 
-      if (lowercase(selectedversion) = 'version 11.3') then
+      if (LowerCase(selectedversion) = 'version 11.3') then
       // for 11.3 version (Axpert Dev)
       begin
         // Pull Axpert Dev - AxperStructures
@@ -1851,7 +1879,7 @@ begin
       commandstrlist.Delimitedtext := selectedPatch;
       selectedversion := commandstrlist[0] + ' ' + commandstrlist[1];
       patch := commandstrlist[2];
-      commandstrlist.free;
+      commandstrlist.Free;
 
       WriteLog('Pulling for Patch');
       Appwriteln('PATCH INSTALLATION PROCESS');
@@ -2019,9 +2047,9 @@ begin
   // If a slash is found, remove everything after it
   if LastSlashPos > 0 then
   begin
-    URL := copy(URL, 1, LastSlashPos - 1);
+    URL := Copy(URL, 1, LastSlashPos - 1);
     LastSlashPos := LastDelimiter('/', URL);
-    URL := copy(URL, 1, LastSlashPos);
+    URL := Copy(URL, 1, LastSlashPos);
     Result := URL;
   end
   else
@@ -2038,9 +2066,9 @@ begin
   // If a slash is found, remove everything after it
   if LastSlashPos > 0 then
   begin
-    path := copy(path, 1, LastSlashPos - 1);
+    path := Copy(path, 1, LastSlashPos - 1);
     LastSlashPos := LastDelimiter('\', path);
-    path := copy(path, 1, LastSlashPos);
+    path := Copy(path, 1, LastSlashPos);
     Result := path;
   end
   else
@@ -2058,9 +2086,9 @@ begin
 
   // If a slash is found, remove everything before it including the slash
   if FirstSlashPos > 0 then
-    Result := copy(URLPath, FirstSlashPos + 1, length(URLPath) - FirstSlashPos)
+    Result := Copy(URLPath, FirstSlashPos + 1, length(URLPath) - FirstSlashPos)
   else if firstBackSlash > 0 then
-    Result := copy(URLPath, firstBackSlash + 1,
+    Result := Copy(URLPath, firstBackSlash + 1,
       length(URLPath) - firstBackSlash)
   else
     Result := URLPath; // No slash found, return original URL path
@@ -2101,7 +2129,7 @@ begin
   try
     try
       WriteLog('CreateFolderStructure starts');
-      //ResetIdHttpReqObj;
+      // ResetIdHttpReqObj;
       // AppWriteln(selectedplugin);
       // writelog('Creating IdHTTP instance');
       // IdHTTP1 := TIdHTTP.Create(nil);
@@ -2139,7 +2167,7 @@ begin
             errmsg := E.Message;
             console_write(errmsg);
             WriteLog('Error in CreateFolderStructures');
-            WriteLog('HTTP Error Code : ' + inttostr(E.ErrorCode));
+            WriteLog('HTTP Error Code : ' + IntToStr(E.ErrorCode));
             WriteLog('HTTP Status     : ' + E.Message);
             WriteLog('Exception Type  : ' + E.ClassName);
             ReadErrorList(errmsg);
@@ -2153,13 +2181,13 @@ begin
                 (depending on the Git provider and authentication method). *)
 
               if IsRetryableHttpError(E.ErrorCode) or
-                (lowercase(errmsg) = 'Read timed out') then
+                (LowerCase(errmsg) = 'read timed out') then
               begin
                 try
                   errmsg := '';
                   Inc(httpretry);
-                  Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                  WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                  Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                  WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                   // Sleep(5000);
                   // DownloadFile(download_url, downloadPath);
                   Sleep(2000);
@@ -2218,7 +2246,7 @@ begin
               errmsg := E.Message;
               console_write(errmsg);
               WriteLog('Error in CreateFolderStructures');
-              WriteLog('Last error: ' + inttostr(E.lasterror));
+              WriteLog('Last error: ' + IntToStr(E.LastError));
               // WriteLog('HTTP Error Code : ' + inttostr(e.ErrorCode));
               WriteLog('HTTP Status     : ' + E.Message);
               WriteLog('Exception Type  : ' + E.ClassName);
@@ -2230,8 +2258,8 @@ begin
                 try
                   errmsg := '';
                   Inc(httpretry);
-                  Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                  WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                  Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                  WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                   ResetHttpConnection;
                   Sleep(2000);
                   JSONText := IdHttp1.Get(TidUri.URLEncode(GURL + '/'));
@@ -2282,8 +2310,8 @@ begin
           WriteLog('IdHTTP1.Get starts, GURL: ' +
             SafeURLForLog(GURL + '/' + Fpath));
           JSONText := GetTextWithRetry(TidUri.URLEncode(GURL + '/' + Fpath));
-          WriteLog('IdHTTP1.Get ends, GURL: ' +
-            SafeURLForLog(GURL + '/' + Fpath));
+          WriteLog('IdHTTP1.Get ends, GURL: ' + SafeURLForLog(GURL + '/'
+            + Fpath));
         Except
           on E: EIdHTTPProtocolException do
           begin
@@ -2292,7 +2320,7 @@ begin
             errmsg := E.Message;
             console_write(errmsg);
             WriteLog('Error in CreateFolderStructures');
-            WriteLog('HTTP Error Code : ' + inttostr(E.ErrorCode));
+            WriteLog('HTTP Error Code : ' + IntToStr(E.ErrorCode));
             WriteLog('HTTP Status     : ' + E.Message);
             WriteLog('Exception Type  : ' + E.ClassName);
             ReadErrorList(errmsg);
@@ -2306,13 +2334,13 @@ begin
                 (depending on the Git provider and authentication method). *)
 
               if IsRetryableHttpError(E.ErrorCode) or
-                (lowercase(errmsg) = 'Read timed out') then
+                (LowerCase(errmsg) = 'read timed out') then
               begin
                 try
                   errmsg := '';
                   Inc(httpretry);
-                  Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                  WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                  Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                  WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                   // Sleep(5000);
                   // DownloadFile(download_url, downloadPath);
                   Sleep(2000);
@@ -2371,7 +2399,7 @@ begin
               errmsg := E.Message;
               console_write(errmsg);
               WriteLog('Error in CreateFolderStructures');
-              WriteLog('Last error: ' + inttostr(E.lasterror));
+              WriteLog('Last error: ' + IntToStr(E.LastError));
               // WriteLog('HTTP Error Code : ' + inttostr(e.ErrorCode));
               WriteLog('HTTP Status     : ' + E.Message);
               WriteLog('Exception Type  : ' + E.ClassName);
@@ -2383,8 +2411,8 @@ begin
                 try
                   errmsg := '';
                   Inc(httpretry);
-                  Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                  WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                  Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                  WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                   ResetHttpConnection;
                   Sleep(2000);
                   JSONText := IdHttp1.Get(TidUri.URLEncode(GURL + '/' + Fpath));
@@ -2432,7 +2460,7 @@ begin
       JsonArray := TJSONObject.ParseJSONValue(JSONText) as TJSONArray;
       if not Assigned(JsonArray) then
         raise Exception.create('Git API returned an invalid folder response.');
-      JSONSize := JsonArray.size;
+      JSONSize := JsonArray.Size;
 
       for I := 0 to JSONSize - 1 do
       begin
@@ -2519,30 +2547,30 @@ begin
           begin
             try
               // Check for .zip extention in the files to download.
-//              if (lowercase(ExtractFileExt(FilePath)) = '.zip') and
-//                (not SameText(patchOrPlugin, 'Package')) then
-//              begin
-//                WriteLog('Zip File Found');
-//                console_write('Zip File Found');
-//                Appwriteln('    - Skipping ZIP file: ' +
-//                  ExtractFileName(FilePath));
-//                WriteLog('ZIP skipped: ' + FilePath);
-//                slUserInstructions.Add
-//                  ('Manual download required for ZIP file:');
-//                slUserInstructions.Add
-//                  ('Download and extract the following file manually:');
-//                slUserInstructions.Add(download_url);
-//                // slUserInstructions.Add('Extract it to: ' + patchLocalPath);
-//                slUserInstructions.Add
-//                  ('--------------------------------------------------');
-//
-//                if not Assigned(slUserInstructions) then
-//                  WriteLog('slUserInstructions not created.');
-//
-//                if slUserInstructions = nil then
-//                  WriteLog('slUserInstructions not created.');
-//                Continue; // Move to next file in loop
-//              end;
+              // if (lowercase(ExtractFileExt(FilePath)) = '.zip') and
+              // (not SameText(patchOrPlugin, 'Package')) then
+              // begin
+              // WriteLog('Zip File Found');
+              // console_write('Zip File Found');
+              // Appwriteln('    - Skipping ZIP file: ' +
+              // ExtractFileName(FilePath));
+              // WriteLog('ZIP skipped: ' + FilePath);
+              // slUserInstructions.Add
+              // ('Manual download required for ZIP file:');
+              // slUserInstructions.Add
+              // ('Download and extract the following file manually:');
+              // slUserInstructions.Add(download_url);
+              // // slUserInstructions.Add('Extract it to: ' + patchLocalPath);
+              // slUserInstructions.Add
+              // ('--------------------------------------------------');
+              //
+              // if not Assigned(slUserInstructions) then
+              // WriteLog('slUserInstructions not created.');
+              //
+              // if slUserInstructions = nil then
+              // WriteLog('slUserInstructions not created.');
+              // Continue; // Move to next file in loop
+              // end;
               ForceDirectories(ExtractFileDir(downloadPath));
               WriteLog('Ensured directory exists: ' +
                 ExtractFileDir(downloadPath));
@@ -2559,7 +2587,7 @@ begin
                 errmsg := E.Message;
                 console_write(errmsg);
                 WriteLog('Error in CreateFolderStructures');
-                WriteLog('HTTP Error Code : ' + inttostr(E.ErrorCode));
+                WriteLog('HTTP Error Code : ' + IntToStr(E.ErrorCode));
                 WriteLog('HTTP Status     : ' + E.Message);
                 WriteLog('Exception Type  : ' + E.ClassName);
                 ReadErrorList(errmsg);
@@ -2573,13 +2601,13 @@ begin
                     (depending on the Git provider and authentication method). *)
 
                   if IsRetryableHttpError(E.ErrorCode) or
-                    (lowercase(errmsg) = 'Read timed out') then
+                    (LowerCase(errmsg) = 'read timed out') then
                   begin
                     try
                       errmsg := '';
                       Inc(httpretry);
-                      Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                      WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                      Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                      WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                       Sleep(2000);
                       DownloadFile(download_url, downloadPath);
                       break; // Success
@@ -2635,7 +2663,7 @@ begin
                   errmsg := E.Message;
                   console_write(errmsg);
                   WriteLog('Error in CreateFolderStructures');
-                  WriteLog('Last error: ' + inttostr(E.lasterror));
+                  WriteLog('Last error: ' + IntToStr(E.LastError));
                   // WriteLog('HTTP Error Code : ' + inttostr(e.ErrorCode));
                   WriteLog('HTTP Status     : ' + E.Message);
                   WriteLog('Exception Type  : ' + E.ClassName);
@@ -2648,8 +2676,8 @@ begin
                     try
                       errmsg := '';
                       Inc(httpretry);
-                      Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                      WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                      Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                      WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                       ResetHttpConnection;
                       Sleep(2000);
                       DownloadFile(download_url, downloadPath);
@@ -2696,15 +2724,15 @@ begin
                 httpretry := 0;
                 while (httpretry < MaxhttpRetryCount) do
                 begin
-                  if (Pos('ssl routines', lowercase(errmsg)) > 0) or
-                    (lowercase(errmsg) = 'zero size file found.') or
-                    (lowercase(errmsg) = 'Read timed out') then
+                  if (Pos('ssl routines', LowerCase(errmsg)) > 0) or
+                    (LowerCase(errmsg) = 'zero size file found.') or
+                    (LowerCase(errmsg) = 'read timed out') then
                   begin
                     try
                       errmsg := '';
                       Inc(httpretry);
-                      Appwriteln('Retrying..(' + inttostr(httpretry) + ')');
-                      WriteLog('Retrying..(' + inttostr(httpretry) + ')');
+                      Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
+                      WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                       Sleep(2000);
                       DownloadFile(download_url, downloadPath);
                       break;
@@ -2798,7 +2826,7 @@ begin
       end;
       // writelog('Createfolderstrucure function ends..');
     finally
-      FreeAndNil(JsonArray);
+      freeandnil(JsonArray);
     end;
   except
     on E: Exception do
@@ -2945,19 +2973,19 @@ function TGitManager.DownloadFile(const URL, FileName: string): string;
 var
   // HTTP: TIdHTTP;
   errmsg: string;
-  filestream: TFileStream;
+  FileStream: TFileStream;
   SSLIOHandler: TIdSSLIOHandlerSocketOpenSSL;
   DownloadedSize: Int64;
 begin
   Result := '';
   WriteLog('Download File function started');
-  filestream := nil;
+  FileStream := nil;
 
   // HTTP := nil;
 
   try
     // HTTP := TIdHTTP.Create(nil);
-    //ResetIdHttpReqObj;
+    // ResetIdHttpReqObj;
     try
       // writelog('Creating IdHTTP instance in DownloadFile Function');
       // writelog('Download File function started');
@@ -3007,13 +3035,13 @@ begin
       // HTTP.IOHandler := SSLIOHandler;
       WriteLog('Starting HTTP GET download');
       WriteLog('Download URL : ' + SafeURLForLog(URL));
-//      IdHttp1.Get('http://10.255.255.1/test.sql', filestream);
-      DownloadedSize := GetFileWithRetry('http://10.255.255.1/test.sql', FileName);
-//      DownloadedSize := GetFileWithRetry(URL, FileName);
+      // IdHttp1.Get('http://10.255.255.1/test.sql', filestream);
+      // DownloadedSize := GetFileWithRetry('http://10.255.255.1/test.sql', FileName);
+      DownloadedSize := GetFileWithRetry(URL, FileName);
       WriteLog('HTTP GET completed');
       // writelog ('Filestream : ' + filestream);
 
-      WriteLog('Downloaded file size : ' + inttostr(DownloadedSize));
+      WriteLog('Downloaded file size : ' + IntToStr(DownloadedSize));
       WriteLog('File download successful');
 
       // Except
@@ -3172,8 +3200,7 @@ begin
           end;
         end;
         ReadErrorList(E.Message);
-        WriteLog('Error while downloading file from :' +
-          SafeURLForLog(URL));
+        WriteLog('Error while downloading file from :' + SafeURLForLog(URL));
         WriteLog('Exception Class: ' + E.ClassName);
         WriteLog('Exception Message: ' + E.Message);
         raise;
@@ -3182,8 +3209,8 @@ begin
   finally
     WriteLog('Cleaning up file stream');
 
-    if Assigned(filestream) then
-      freeandnil(filestream);
+    if Assigned(FileStream) then
+      freeandnil(FileStream);
     // freeandnil(HTTP);
   end;
   WriteLog('Download File Function ends');
@@ -3235,7 +3262,7 @@ begin
   Found := False;
   for I := Low(patcharray) to High(patcharray) do
   begin
-    if lowercase(patch) = lowercase(patcharray[I]) then
+    if LowerCase(patch) = LowerCase(patcharray[I]) then
     begin
       Result := I;
       Found := True;

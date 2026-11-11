@@ -9,7 +9,7 @@ uses
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
   IdBaseComponent,
   IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, IdSSLOpenSSL,
-  IdAuthentication, uAxLog, IdStack,
+  IdAuthentication, uAxLog, IdStack, IdExceptionCore,
   {Soap.EncdDecd, IdCoder, IdCoder3to4, IdCoderMIME,} IdMultipartFormData,
   StrUtils,
   System.IOUtils, System.Types, System.Generics.Collections, DBXJSON,
@@ -26,13 +26,14 @@ type
     pluginName: string;
     httpretry: Integer;
     httpReqCount: Integer;
+    FPreferApiDownloads: Boolean;
     procedure CleanIdHttp;
     procedure InitIdHttp;
     procedure ResetIdHttpReqObj;
     procedure SetGitAuthentication(const Token: string);
     procedure ResetHttpConnection;
     function GetTextWithRetry(const URL: string): string;
-    function GetFileWithRetry(const URL, FileName: string): Int64;
+    function GetFileWithRetry(const URL, FileName, FallbackURL: string): Int64;
     function IsRetryableRequestError(const E: Exception): Boolean;
     function GetRetryDelayMs(const AttemptNumber: Integer): Integer;
 
@@ -52,7 +53,8 @@ type
     function SelectPlugin(PluginCount: Integer): String;
     function CreateFolderStructure(GURL: String; Fpath: String): string;
     function pullfromgit(): string;
-    function DownloadFile(const URL, FileName: string): string;
+    function DownloadFile(const URL, FileName: string;
+      const FallbackURL: string = ''): string;
     function pullcompressfile(FileName: string;
       var Response: TStringStream): string;
     function createPluginArray(): string;
@@ -91,12 +93,14 @@ const
   GitReadTimeoutMs = 120000;
   GitInitialRetryDelayMs = 2000;
   GitMaxRetryDelayMs = 60000;
+  GitContentsApiMaxRawFileSize: Int64 = 100 * 1024 * 1024;
 
 constructor TGitManager.create;
 begin
   IdHttp1 := nil;
   SSLIOHandler := nil;
   httpReqCount := 0;
+  FPreferApiDownloads := False;
   InitIdHttp;
   SetGitAuthentication(Access_Token);
 end;
@@ -166,7 +170,10 @@ begin
   NewSSLIOHandler := nil;
   try
     NewSSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.create(nil);
+    NewSSLIOHandler.SSLOptions.Method := sslvTLSv1_2;
     NewSSLIOHandler.SSLOptions.SSLVersions := [sslvTLSv1_2];
+    NewSSLIOHandler.SSLOptions.Mode := sslmClient;
+    NewSSLIOHandler.PassThrough := False;
 
     NewHttp.IOHandler := NewSSLIOHandler;
     NewHttp.HandleRedirects := True;
@@ -254,6 +261,12 @@ var
 begin
   Result := False;
 
+  if E is EIdConnectTimeout then
+  begin
+    Result := True;
+    Exit;
+  end;
+
   if E is EIdSocketError then
   begin
     ErrorCode := EIdSocketError(E).LastError;
@@ -326,6 +339,10 @@ begin
   for AttemptNumber := 1 to MaxGitRequestAttempts do
   begin
     ResetIdHttpReqObj;
+    // Directory/content API calls use GitHub's JSON media type. Re-apply it
+    // here because the same client is also used by the raw-file downloader.
+    IdHttp1.Request.Accept := 'application/vnd.github+json';
+    IdHttp1.Request.UserAgent := 'Axpert';
     StartedAt := GetTickCount;
     WriteGitLog('Git request start. URL=' + SafeURLForLog(URL) + ', attempt=' +
       IntToStr(AttemptNumber) + '/' + IntToStr(MaxGitRequestAttempts) +
@@ -378,7 +395,8 @@ begin
   end;
 end;
 
-function TGitManager.GetFileWithRetry(const URL, FileName: string): Int64;
+function TGitManager.GetFileWithRetry(const URL, FileName,
+  FallbackURL: string): Int64;
 var
   AttemptNumber: Integer;
   RetryDelayMs: Integer;
@@ -386,17 +404,36 @@ var
   FileStream: TFileStream;
   TempFileName: string;
   ErrCode: Cardinal;
+  ActiveURL: string;
+  AcceptMediaType: string;
+  UsingApiFallback: Boolean;
 begin
   Result := 0;
   TempFileName := FileName + '.part';
+  UsingApiFallback := FPreferApiDownloads and (FallbackURL <> '');
+  if UsingApiFallback then
+  begin
+    ActiveURL := FallbackURL;
+    AcceptMediaType := 'application/vnd.github.raw+json';
+    WriteGitLog('Using GitHub Contents API raw-media download because a prior '
+      + 'raw.githubusercontent.com connection timed out');
+  end
+  else
+  begin
+    ActiveURL := URL;
+    AcceptMediaType := '*/*';
+  end;
 
   for AttemptNumber := 1 to MaxGitRequestAttempts do
   begin
     ResetIdHttpReqObj;
+    IdHttp1.Request.Accept := AcceptMediaType;
+    IdHttp1.Request.UserAgent := 'Axpert';
     FileStream := nil;
     StartedAt := GetTickCount;
-    WriteGitLog('Git download start. URL=' + SafeURLForLog(URL) + ', file=' +
-      FileName + ', attempt=' + IntToStr(AttemptNumber) + '/' +
+    WriteGitLog('Git download start. URL=' + SafeURLForLog(ActiveURL) +
+      ', source=' + IfThen(UsingApiFallback, 'contents-api', 'raw-host') +
+      ', file=' + FileName + ', attempt=' + IntToStr(AttemptNumber) + '/' +
       IntToStr(MaxGitRequestAttempts) + ', connect-timeout=' +
       IntToStr(GitConnectTimeoutMs) + 'ms, read-timeout=' +
       IntToStr(GitReadTimeoutMs) + 'ms');
@@ -407,7 +444,7 @@ begin
 
       FileStream := TFileStream.create(TempFileName, fmCreate);
       WriteGitLog('Calling IdHttp1.Get');
-      IdHttp1.Get(URL, FileStream);
+      IdHttp1.Get(ActiveURL, FileStream);
       Result := FileStream.Size;
       freeandnil(FileStream);
 
@@ -449,6 +486,14 @@ begin
 
         WriteGitLog('CopyFile completed successfully');
 
+        // Get latest version from version.info.part
+        if SameText(ExtractFileName(TempFileName), 'version.info.part') then
+        begin
+          VersionTakenFromVersionInfo := Trim(TFile.ReadAllText(TempFileName));
+
+          WriteGitLog('Latest Version taken from File: ' + VersionTakenFromVersionInfo);
+        end;
+
         // Delete the temporary file after successful copying
         if not DeleteFile(PChar(TempFileName)) then
         begin
@@ -471,10 +516,12 @@ begin
           raise;
         end;
       end;
-      WriteGitLog('Git download success. URL=' + SafeURLForLog(URL) + ', file='
-        + FileName + ', attempt=' + IntToStr(AttemptNumber) + ', elapsed=' +
-        IntToStr(Cardinal(GetTickCount - StartedAt)) + 'ms, HTTP=' +
-        IntToStr(IdHttp1.ResponseCode) + ', bytes=' + IntToStr(Result));
+      WriteGitLog('Git download success. URL=' + SafeURLForLog(ActiveURL) +
+        ', source=' + IfThen(UsingApiFallback, 'contents-api', 'raw-host') +
+        ', file=' + FileName + ', attempt=' + IntToStr(AttemptNumber) +
+        ', elapsed=' + IntToStr(Cardinal(GetTickCount - StartedAt)) +
+        'ms, HTTP=' + IntToStr(IdHttp1.ResponseCode) + ', bytes=' +
+        IntToStr(Result));
       Exit;
     except
       on E: Exception do
@@ -483,10 +530,11 @@ begin
         if FileExists(TempFileName) and not DeleteFile(TempFileName) then
           WriteGitLog('Unable to remove partial download: ' + TempFileName);
 
-        WriteGitLog('Git download failed. URL=' + SafeURLForLog(URL) + ', file='
-          + FileName + ', attempt=' + IntToStr(AttemptNumber) + ', elapsed=' +
-          IntToStr(Cardinal(GetTickCount - StartedAt)) + 'ms, exception=' +
-          E.ClassName + ', message=' + E.Message);
+        WriteGitLog('Git download failed. URL=' + SafeURLForLog(ActiveURL) +
+          ', source=' + IfThen(UsingApiFallback, 'contents-api', 'raw-host') +
+          ', file=' + FileName + ', attempt=' + IntToStr(AttemptNumber) +
+          ', elapsed=' + IntToStr(Cardinal(GetTickCount - StartedAt)) +
+          'ms, exception=' + E.ClassName + ', message=' + E.Message);
         if E is EIdSocketError then
           WriteGitLog('Git socket error code=' + IntToStr(EIdSocketError(E)
             .LastError))
@@ -502,11 +550,32 @@ begin
               IdHttp1.Response.RawHeaders.Values['Retry-After']);
         end;
 
+        // Indy resolves only one address from raw.githubusercontent.com's DNS
+        // result. If that address is unreachable, retry through the Contents
+        // API raw-media endpoint already returned in this file's JSON metadata.
+        if (not UsingApiFallback) and (FallbackURL <> '') and
+          (((E is EIdSocketError) and
+          (EIdSocketError(E).LastError = 10060)) or
+          (E is EIdConnectTimeout)) and
+          (AttemptNumber < MaxGitRequestAttempts) then
+        begin
+          FPreferApiDownloads := True;
+          UsingApiFallback := True;
+          ActiveURL := FallbackURL;
+          AcceptMediaType := 'application/vnd.github.raw+json';
+          WriteGitLog('raw.githubusercontent.com connect timed out; switching '
+            + 'this and subsequent eligible downloads to the GitHub Contents '
+            + 'API raw-media endpoint');
+          ResetHttpConnection;
+          Continue;
+        end;
+
         if (AttemptNumber = MaxGitRequestAttempts) or
           not IsRetryableRequestError(E) then
         begin
-          WriteGitLog('Git download final failure. URL=' + SafeURLForLog(URL) +
-            ', file=' + FileName + ', attempts=' + IntToStr(AttemptNumber));
+          WriteGitLog('Git download final failure. URL=' +
+            SafeURLForLog(ActiveURL) + ', file=' + FileName + ', attempts=' +
+            IntToStr(AttemptNumber));
           raise EGitRequestFailed.create(E.ClassName + ': ' + E.Message);
         end;
 
@@ -1846,15 +1915,15 @@ begin
 
       WriteLog('Plugin structures pulled successfully for ' + selectedPlugin);
     end
-    else if patchOrPlugin = 'Package' then
+    else if patchOrPlugin = 'Product' then
     begin
-      WriteLog('Pulling Package Structures from Git');
-      console_write('1. Pulling Package Structure Files from GIT:', 3);
+      WriteLog('Pulling Product Structures from Git');
+      console_write('1. Pulling Product Structure Files from GIT:', 3);
       writeln;
-      writeln('  - ' + selectedPackage + ' selected.');
-      WriteLog(selectedPackage + ' start pulling from git');
+      writeln('  - ' + selectedProduct + ' selected.');
+      WriteLog(selectedProduct + ' start pulling from git');
 
-      CheckExistancePath := packageLocalPath + selectedPlugin + '\Structures';
+      CheckExistancePath := ProductLocalPath + selectedPlugin + '\Structures';
       WriteLog('Path recevied in CheckExistancePath : ' + CheckExistancePath);
       if DirectoryExists(CheckExistancePath) then
       begin
@@ -1863,16 +1932,46 @@ begin
         CreateDir(CheckExistancePath);
       end;
 
-      CreateFolderStructure(gitpackageurl + selectedPackage, 'Structures');
+      CreateFolderStructure(gitproducturl + selectedProduct, 'Structures');
       // CreateFolderStructure(GitPluginURL + selectedplugin, 'PluginScripts');
 
       if pageNotFoundError then
         Exit;
 
-      console_write('    - Package Structures pulled successfully.', 10);
+      console_write('    - Product Structures pulled successfully.', 10);
       writeln;
 
-      WriteLog('Package structures pulled successfully for ' + selectedPackage);
+      WriteLog('Product structures pulled successfully for ' + selectedProduct);
+    end
+
+    ///changerequest
+     else if patchOrPlugin = 'ChangeRequest' then
+    begin
+      WriteLog('Pulling ChangeRequest Structures from Git');
+      console_write('1. Pulling ChangeRequest Structure Files from GIT:', 3);
+      writeln;
+      writeln('  - ' + selectedCR + ' selected.');
+      WriteLog(selectedCR + ' start pulling from git');
+
+      CheckExistancePath := ChangeRequestLocalPath +  selectedCR + '\Structures';
+      WriteLog('Path recevied in CheckExistancePath : ' + CheckExistancePath);
+      if DirectoryExists(CheckExistancePath) then
+      begin
+        WriteLog('Requested Local Directory Exists !');
+        TDirectory.Delete(CheckExistancePath, True);
+        CreateDir(CheckExistancePath);
+      end;
+
+      CreateFolderStructure(gitChangeRequesturl + selectedCR, 'Structures');
+      // CreateFolderStructure(GitPluginURL + selectedplugin, 'PluginScripts');
+
+      if pageNotFoundError then
+        Exit;
+
+      console_write('    - ChangeRequest Structures pulled successfully.', 10);
+      writeln;
+
+      WriteLog('ChangeRequest structures pulled successfully for ' + selectedCR);
     end;
     WriteLog('pullStructuresfromgit function ends..');
   finally
@@ -2013,38 +2112,84 @@ begin
       WriteLog('files pulled successfully for ' + selectedPlugin);
       Appwriteln;
     end;
-    if patchOrPlugin = 'Package' then
+    if patchOrPlugin = 'Product' then
     begin
-      WriteLog('Pulling for Package');
+      WriteLog('Pulling for Product');
       Appwriteln;
-      Appwriteln('PACKAGE INSTALLATION PROCESS');
+      Appwriteln('Product INSTALLATION PROCESS');
       Appwriteln('=============================');
       Appwriteln;
-      ForceDirectories(packageLocalPath);
-      console_write('1. Pulling Package from GIT:', 3);
+      ForceDirectories(ProductLocalPath);
+      console_write('1. Pulling Product from GIT:', 3);
       Appwriteln;
-      Appwriteln('  - ' + selectedPackage + ' selected.');
-      Appwriteln('  - Pulling ' + selectedPackage +
+      Appwriteln('  - ' + selectedProduct + ' selected.');
+      Appwriteln('  - Pulling ' + selectedProduct +
         ' files from GIT one by one:');
-      CheckExistancePath := packageLocalPath + selectedPackage;
+      CheckExistancePath := ProductLocalPath + selectedProduct + '\' + requestedVersion;
+      WriteLog('Final Path CheckExistancePath : '+ CheckExistancePath);
       if DirectoryExists(CheckExistancePath) then
       begin
         TDirectory.Delete(CheckExistancePath, True);
         CreateDir(CheckExistancePath)
       end;
       WriteLog('CreateFolderStructure function started..');
-      CreateFolderStructure(gitpackageurl + selectedPackage, '');
+      WriteLog('Final GIT-URL : '+ gitProducturl + selectedProduct+ '/' + requestedVersion);
+      CreateFolderStructure(gitProducturl + selectedProduct+ '/' + requestedVersion, '');
       console_write('    - All ', 10);
       write(selectedPlugin);
       console_write(' files pulled successfully.', 10);
       Appwriteln;
-      WriteLog('files pulled successfully for ' + selectedPackage);
+      WriteLog('files pulled successfully for ' + selectedProduct);
       Appwriteln;
     end;
-    WriteLog('pullfromgit function ends..');
-  finally
-
-  end;
+	//ChangeRequest
+    if patchOrPlugin = 'ChangeRequest' then
+    begin
+      WriteLog('Pulling for ChangeRequest');
+      Appwriteln;
+      Appwriteln('ChangeRequest INSTALLATION PROCESS');
+      Appwriteln('=============================');
+      Appwriteln;
+      ForceDirectories(ChangeRequestLocalPath);
+      console_write('1. Pulling ChangeRequest from GIT:', 3);
+      Appwriteln;
+      Appwriteln('  - ' + selectedCR + ' selected.');
+      Appwriteln('  - Pulling ' + selectedCR +
+        ' files from GIT one by one:');
+      CheckExistancePath := ChangeRequestLocalPath + selectedCR + '\' + requestedVersion;
+      WriteLog('Final Path CheckExistancePath : '+ CheckExistancePath);
+      if DirectoryExists(CheckExistancePath) then
+      begin
+        TDirectory.Delete(CheckExistancePath, True);
+        CreateDir(CheckExistancePath)
+      end;
+      WriteLog('CreateFolderStructure function started..');
+      WriteLog('Final GIT-URL : '+ gitChangeRequesturl + selectedCR + '/' + requestedVersion);
+      CreateFolderStructure(gitChangeRequesturl + selectedCR+ '/' + requestedVersion, '');
+      console_write('    - All ', 10);
+      write(selectedPlugin);
+      console_write(' files pulled successfully.', 10);
+      Appwriteln;
+      WriteLog('files pulled successfully for ' + selectedCR);
+      Appwriteln;
+    end;
+      WriteLog('pullfromgit function ends..');
+    except
+      on E: Exception do
+      begin
+        // A file/folder pull failure must stop the pull and remain marked incomplete.
+        bGitPullIncomplete := True;
+        WriteLog('pullfromgit failed. Exception: ' + E.ClassName);
+        WriteLog('pullfromgit error: ' + E.Message);
+        Console_Writeln('Git pull failed: ' + E.Message, 12);
+        // Do not re-raise here. Return to uaxinstallermain so its
+        // bGitPullIncomplete check can display the final installation message.
+        Exit;
+      end;
+    end;
+//  finally
+//
+//  end;
 
 end;
 
@@ -2116,6 +2261,18 @@ begin
       length(URLPath) - firstBackSlash)
   else
     Result := URLPath; // No slash found, return original URL path
+
+    ///This logic has been moved to its calling point as this an general function.
+    ////
+//    if (Copy(Result, 1, Length(RequestedVersion)) = RequestedVersion) and
+//   (Length(Result) > Length(RequestedVersion)) and
+//   ((Result[Length(RequestedVersion) + 1] = '/') or
+//    (Result[Length(RequestedVersion) + 1] = '\')) then
+//    begin
+//      Delete(Result, 1, Length(RequestedVersion) + 1);
+//    end;
+    ////
+
 end;
 
 function IsRetryableHttpError(const ErrorCode: Integer): Boolean;
@@ -2141,13 +2298,15 @@ var
   JSONSize, I: Integer;
   JSONText, JText: string;
   FolderPath, UpFolderPath, FilePath, FileType, FileContent,
-    download_url: String;
+    download_url, api_download_url: String;
   TxtFile, txfile: TextFile;
   aftfirstseg: string;
   downloadPath: string;
   filecnt: string;
   errmsg: string;
   nfilename, nFilePath, DisplayDestPath: string;
+  GitFileSize: Int64;
+  FileDownloadSucceeded: Boolean;
 begin
   JsonArray := nil;
   try
@@ -2323,7 +2482,8 @@ begin
             pageNotFoundError := True;
             // If any issue occurs
             bGitPullIncomplete := True;
-            Exit;
+            // Propagate the failure so parent folders stop processing.
+            raise;
           end;
 
         end;
@@ -2476,7 +2636,8 @@ begin
             pageNotFoundError := True;
             // If any issue occurs
             bGitPullIncomplete := True;
-            Exit;
+            // Propagate the failure so parent folders stop processing.
+            raise;
           end;
         end;
       end;
@@ -2529,23 +2690,55 @@ begin
             // aftfirstseg := RemoveFirstSegmentFromURLPath(aftfirstseg);
             // aftfirstseg := RemoveFirstSegmentFromURLPath(aftfirstseg);
             // aftfirstseg := RemoveFirstSegmentFromURLPath(aftfirstseg);
+            //// Needs to be verified with other commands too.
+            if (Copy(aftfirstseg, 1, Length(RequestedVersion)) = RequestedVersion) and
+           (Length(aftfirstseg) > Length(RequestedVersion)) and
+           ((aftfirstseg[Length(RequestedVersion) + 1] = '/') or
+            (aftfirstseg[Length(RequestedVersion) + 1] = '\')) then
+            begin
+              Delete(aftfirstseg, 1, Length(RequestedVersion) + 1);
+            end;
+            /////
+
           end;
           WriteLog('Calling CreateFolderStructure...');
           WriteLog('GURL: ' + SafeURLForLog(GURL));
           WriteLog('aftfirstseg: ' + aftfirstseg);
-          CreateFolderStructure(GURL, aftfirstseg);
+          try
+            CreateFolderStructure(GURL, aftfirstseg);
+          except
+            on E: Exception do
+            begin
+              bGitPullIncomplete := True;
+              WriteLog('Failed to process subfolder: ' + aftfirstseg);
+              WriteLog('Exception: ' + E.ClassName);
+              WriteLog('Error: ' + E.Message);
+              Console_Writeln('Failed to process folder: ' + aftfirstseg, 12);
+              raise;
+            end;
+          end;
         end
         else
         begin
           FilePath := JSONObject.Get('path').JSONValue.value;
           FilePath := StringReplace(FilePath, '/', '\', [rfReplaceAll]);
           download_url := JSONObject.Get('download_url').JSONValue.value;
+          api_download_url := '';
+          GitFileSize := -1;
+          if Assigned(JSONObject.Get('size')) then
+            GitFileSize := StrToInt64Def(JSONObject.Get('size').JSONValue.value,
+              -1);
+          if Assigned(JSONObject.Get('url')) and (GitFileSize >= 0) and
+            (GitFileSize <= GitContentsApiMaxRawFileSize) then
+            api_download_url := JSONObject.Get('url').JSONValue.value;
           // 22-11-2024 | As per new git structure
           // downloadPath := patchLocalPath + '\' + FilePath;
           if patchOrPlugin = 'Plugin' then
             downloadPath := pluginLocalPath + '\' + FilePath
-          else if patchOrPlugin = 'Package' then
-            downloadPath := packageLocalPath + '\' + FilePath
+          else if patchOrPlugin = 'Product' then
+            downloadPath := ProductLocalPath + '\' + FilePath
+          else if patchOrPlugin = 'ChangeRequest' then
+            downloadPath := ChangeRequestLocalPath + '\' + FilePath
           else
             downloadPath := patchLocalPath + '\' + FilePath;
           // downloadPath := GetCurrentDir + '\' + FilePath;
@@ -2572,7 +2765,7 @@ begin
             try
               // Check for .zip extention in the files to download.
               // if (lowercase(ExtractFileExt(FilePath)) = '.zip') and
-              // (not SameText(patchOrPlugin, 'Package')) then
+              // (not SameText(patchOrPlugin, 'Product')) then
               // begin
               // WriteLog('Zip File Found');
               // console_write('Zip File Found');
@@ -2595,14 +2788,36 @@ begin
               // WriteLog('slUserInstructions not created.');
               // Continue; // Move to next file in loop
               // end;
-              ForceDirectories(ExtractFileDir(downloadPath));
-              WriteLog('Ensured directory exists: ' +
-                ExtractFileDir(downloadPath));
-              console_write('    - Downloading file....');
-              WriteLog('Downloading file....');
-              DownloadFile(download_url, downloadPath);
-              // console_write('File Downloaded successfully');
-              WriteLog('File Downloaded successfully');
+              FileDownloadSucceeded := False;
+              try
+                ForceDirectories(ExtractFileDir(downloadPath));
+                WriteLog('Ensured directory exists: ' +
+                  ExtractFileDir(downloadPath));
+                console_write('    - Downloading file....');
+                WriteLog('Downloading file....');
+                // DownloadFile uses GetFileWithRetry, which owns the download
+                // retry policy. Do not add another retry loop here.
+                DownloadFile(download_url, downloadPath, api_download_url);
+                FileDownloadSucceeded := True;
+                // console_write('File Downloaded successfully');
+                WriteLog('File Downloaded successfully');
+              except
+                on E: Exception do
+                begin
+                  FileDownloadSucceeded := False;
+                  bGitPullIncomplete := True;
+                  InstallErrMsg := E.ClassName + ' : ' + E.Message;
+//                  WriteLog('File download failed; continuing with next item.');
+                  WriteLog('Failed file: ' + FilePath);
+                  WriteLog('Destination: ' + downloadPath);
+                  WriteLog('Exception: ' + E.ClassName);
+                  WriteLog('Error: ' + E.Message);
+                  Console_Writeln('Failed to download: ' +
+                    ExtractFileName(FilePath) + '. Pulling stopped.', 12);
+                  ReadErrorList(E.Message);
+                  Raise;
+                end;
+              end;
             Except
               on E: EIdHTTPProtocolException do
               begin
@@ -2633,7 +2848,8 @@ begin
                       Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
                       WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                       Sleep(2000);
-                      DownloadFile(download_url, downloadPath);
+                      DownloadFile(download_url, downloadPath,
+                        api_download_url);
                       break; // Success
                     except
                       on E: Exception do
@@ -2704,7 +2920,8 @@ begin
                       WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                       ResetHttpConnection;
                       Sleep(2000);
-                      DownloadFile(download_url, downloadPath);
+                      DownloadFile(download_url, downloadPath,
+                        api_download_url);
                       break;
                     except
                       on E: Exception do
@@ -2758,7 +2975,8 @@ begin
                       Appwriteln('Retrying..(' + IntToStr(httpretry) + ')');
                       WriteLog('Retrying..(' + IntToStr(httpretry) + ')');
                       Sleep(2000);
-                      DownloadFile(download_url, downloadPath);
+                      DownloadFile(download_url, downloadPath,
+                        api_download_url);
                       break;
                     except
                       on E: Exception do
@@ -2799,12 +3017,20 @@ begin
             // //  IdHTTP1.Get(download_url,FileStream);
             // // download_url := JSONObject.Get('download_url').JSONValue.value;
             // // HandleResponse(IdHTTP1.ResponseCode);
-            Appwriteln;
-            AppWrite('    -');
-            console_write(' ' + ExtractFileName(FilePath), 10);
-            AppWrite(' cloned successfully.');
-            Appwriteln;
-            WriteLog(ExtractFileName(FilePath) + 'cloned successfully.');
+            if FileDownloadSucceeded then
+            begin
+              Appwriteln;
+              AppWrite('    -');
+              console_write(' ' + ExtractFileName(FilePath), 10);
+              AppWrite(' cloned successfully.');
+              Appwriteln;
+              WriteLog(ExtractFileName(FilePath) + 'cloned successfully.');
+            end
+            else
+            begin
+              WriteLog('Skipping success message because download failed: ' +
+                FilePath);
+            end;
           end;
 
           /// if (Copy(ExtractFileName(getcurrentdir()+'\'+FilePath), 0, 3) = 'c__') and
@@ -2864,6 +3090,8 @@ begin
       ReadErrorList(E.Message);
       // If any issue occurs
       bGitPullIncomplete := True;
+      // Propagate the failure through recursive folders to pullfromgit().
+      raise;
     end;
   end;
   WriteLog('Createfolderstrucure function ends..')
@@ -2993,7 +3221,8 @@ end;
 
 *)
 
-function TGitManager.DownloadFile(const URL, FileName: string): string;
+function TGitManager.DownloadFile(const URL, FileName,
+  FallbackURL: string): string;
 var
   // HTTP: TIdHTTP;
   errmsg: string;
@@ -3061,7 +3290,7 @@ begin
       WriteLog('Download URL : ' + SafeURLForLog(URL));
       // IdHttp1.Get('http://10.255.255.1/test.sql', filestream);
       // DownloadedSize := GetFileWithRetry('http://10.255.255.1/test.sql', FileName);
-      DownloadedSize := GetFileWithRetry(URL, FileName);
+      DownloadedSize := GetFileWithRetry(URL, FileName, FallbackURL);
       WriteLog('HTTP GET completed');
       // writelog ('Filestream : ' + filestream);
 

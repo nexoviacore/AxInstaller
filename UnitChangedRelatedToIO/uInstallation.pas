@@ -15,7 +15,7 @@ uses
   DB, DBClient, uAxLog,
   SimpleDS, Provider, SqlExpr, DBXCommon, DBXOracle, uImportStructures,
   uGitManager, uInstallDbScripts, uInstallRMQClients, uImportDefinition,
-  uInstallPluginScripts, uAppIO;
+  uInstallPluginScripts, uAppIO,uXDS;
 
 type
   TInstallation = class
@@ -42,12 +42,15 @@ type
     function InstallPluginScripts(): string;
     // function InstallAxpertStructureFiles(Sourcepath: string; isRuntime: Boolean = False): String;
 
-    function InstallPackage(Package: string): string;
-    function PackageInstallWebFiles(webfilepath: string;
+    function InstallProduct(Product: string): string;
+    function ProductInstallWebFiles(webfilepath: string;
       dstPath: string): string;
-    function PackageFindFile(Sourcepath, destpath: string): string;
-    // function PackageInstallAxpertStructures(): string;
+    function ProductFindFile(Sourcepath, destpath: string): string;
+    // function ProductInstallAxpertStructures(): string;
     function InstallAxiData: string;
+
+    function GetStoredVersionFromDB(const ProductOrCRName: string): string;
+    procedure StoreLatestVersionToDb(const ProductOrCRName: string; const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
 
   end;
 
@@ -172,7 +175,7 @@ begin
               begin
                 fulldestpath := destpath + '\' + projectname + '\HTMLPages' + '\js';
                 ForceDirectories(fulldestpath);
-                FindFileNew(fullsourcepath + 'js', fulldestpath);
+                FindFileNew(fullsourcepath + 'HTMLPages' + '\js', fulldestpath);
               end;
 
               // css
@@ -180,7 +183,7 @@ begin
               begin
                 fulldestpath := destpath + '\' + projectname + '\HTMLPages' + '\css';
                 ForceDirectories(fulldestpath);
-                FindFileNew(fullsourcepath + 'css', fulldestpath);
+                FindFileNew(fullsourcepath + 'HTMLPages' + '\css', fulldestpath);
               end;
             end
             else
@@ -238,7 +241,7 @@ begin
           begin
             fulldestpath := destpath + '\' + projectname + '\HTMLPages' + '\js';
             ForceDirectories(fulldestpath);
-            FindFileNew(fullsourcepath + 'js', fulldestpath);
+            FindFileNew(fullsourcepath + 'HTMLPages' + '\js', fulldestpath);
           end;
 
           // css
@@ -246,7 +249,7 @@ begin
           begin
             fulldestpath := destpath + '\' + projectname + '\HTMLPages' + '\css';
             ForceDirectories(fulldestpath);
-            FindFileNew(fullsourcepath + 'css', fulldestpath);
+            FindFileNew(fullsourcepath + 'HTMLPages' + '\css', fulldestpath);
           end;
         end
         else
@@ -525,8 +528,11 @@ begin
     if patchOrPlugin = 'Plugin' then
       AxStruPath := { patchLocalPath } pluginLocalPath + selectedPlugin + '\' +
         cAxpertStructures + '\' + databasetype + '\'
-    else if patchOrPlugin = 'Package' then
-      AxStruPath := { patchLocalPath } packageLocalPath + selectedPackage + '\'
+    else if patchOrPlugin = 'Product' then
+      AxStruPath := { patchLocalPath } ProductLocalPath + selectedProduct + '\' +requestedVersion+ '\'
+        + cAxpertStructures + '\' + databasetype + '\'
+    else if patchOrPlugin = 'ChangeRequest' then
+      AxStruPath := { patchLocalPath } ChangeRequestLocalPath + selectedCR + '\' +requestedVersion+ '\'
         + cAxpertStructures + '\' + databasetype + '\';
 
     writelog('AxStruPath : ' + AxStruPath);
@@ -658,8 +664,11 @@ begin
     if patchOrPlugin = 'Plugin' then
       AxStruPath := { patchLocalPath } pluginLocalPath + selectedPlugin + '\' +
         cAxpertStructures + '\' + databasetype + '\'
-    else if patchOrPlugin = 'Package' then
-      AxStruPath := { patchLocalPath } packageLocalPath + selectedPackage + '\'
+    else if patchOrPlugin = 'Product' then
+      AxStruPath := { patchLocalPath } ProductLocalPath + selectedProduct +'\'+requestedVersion+ '\'
+        + cAxpertStructures + '\' + databasetype + '\'
+    else if patchOrPlugin = 'ChangeRequest' then
+      AxStruPath := { patchLocalPath } ChangeRequestLocalPath + selectedCR + '\' +requestedVersion+ '\'
         + cAxpertStructures + '\' + databasetype + '\';
 
     writelog('AxStruPath : ' + AxStruPath);
@@ -1351,19 +1360,24 @@ begin
 
 end;
 
-function TInstallation.InstallPackage(Package: string): string;
+function TInstallation.InstallProduct(Product: string): string;
 var
   dpath: string;
 begin
   AppWriteln;
-  Console_write('2. Starting Package Installation:', 3);
+  Console_write('2. Starting Product Installation:', 3);
   AppWriteln;
   dpath := runwebcodepath;
-  PackageInstallWebFiles(packageLocalPath + selectedPackage, dpath);
+  if  patchOrPlugin = 'Product' then
+    ProductInstallWebFiles(ProductLocalPath + selectedProduct + '\' +requestedVersion , dpath)
+  else if  patchOrPlugin = 'ChangeRequest' then
+    ProductInstallWebFiles(ChangeRequestLocalPath + selectedCR + '\' +requestedVersion , dpath)
+  else
+   ProductInstallWebFiles(ProductLocalPath + selectedProduct, dpath);
   AppWriteln;
 end;
 
-function TInstallation.PackageInstallWebFiles(webfilepath: string;
+function TInstallation.ProductInstallWebFiles(webfilepath: string;
   dstPath: string): string;
 var
   webpath: string;
@@ -1375,22 +1389,22 @@ begin
   Console_write('  - Installing Plugin: ' + selectedPlugin, 5);
   AppWriteln;
   Console_write
-    ('   - Copying files to corresponding Package folders from the GIT download directory.',
+    ('   - Copying files to corresponding Product folders from the GIT download directory.',
     10);
   AppWriteln;
   AppWriteln;
 
-  // destinationPath := runwebcodepath + '\' + cPackages + '\' + selectedPackage;
+  // destinationPath := runwebcodepath + '\' + cProducts + '\' + selectedProduct;
   destinationPath := runwebcodepath;
   destinationPath := TRegEx.Replace(destinationPath, '\\+', '\');
   ForceDirectories(destinationPath);
   destinationPath := IncludeTrailingBackslash(destinationPath);
 
-  PackageFindFile(webpath, destinationPath);
+  ProductFindFile(webpath, destinationPath);
 
 end;
 
-function TInstallation.PackageFindFile(Sourcepath, destpath: string): string;
+function TInstallation.ProductFindFile(Sourcepath, destpath: string): string;
 var
   fileArray: TArray<string>;
   folderArray: TArray<string>;
@@ -1401,7 +1415,7 @@ var
 begin
   try
     /// Need to verify and handle if anyother folders are included////
-    writelog('PackageFindFile function starts...');
+    writelog('ProductFindFile function starts...');
     fileArray := TArray<string>(TDirectory.GetFiles(Sourcepath));
     filecount := Length(fileArray);
 
@@ -1441,7 +1455,7 @@ begin
 
                 fulldestpath := destpath + projectname + '\HTMLPages';
                 ForceDirectories(fulldestpath);
-                PackageFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
+                ProductFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
               end;
 
               // js
@@ -1449,7 +1463,7 @@ begin
               begin
                 fulldestpath := destpath + projectname + '\HTMLPages' + '\js';
                 ForceDirectories(fulldestpath);
-                PackageFindFile(fullsourcepath + 'js', fulldestpath);
+                ProductFindFile(fullsourcepath + 'HTMLPages\js', fulldestpath);
               end;
 
               // css
@@ -1457,19 +1471,19 @@ begin
               begin
                 fulldestpath := destpath + projectname + '\HTMLPages' + '\css';
                 ForceDirectories(fulldestpath);
-                PackageFindFile(fullsourcepath + 'css', fulldestpath);
+                ProductFindFile(fullsourcepath + 'HTMLPages\css', fulldestpath);
               end;
             end
             else
             begin
-              // Currently, only CustomPages are copied to the AxpertWeb folder during package installation.
-              // Other folders such as Structures, Scripts, and PackageScripts remain in the local download
+              // Currently, only CustomPages are copied to the AxpertWeb folder during Product installation.
+              // Other folders such as Structures, Scripts, and ProductScripts remain in the local download
               // folder and are processed directly from there as required.
               //   - Structures are imported from the local download path.
               //   - Scripts are executed from the local download path.
-              //   - PackageScripts are copied from the local download path to the ArmScripts folder.
+              //   - ProductScripts are copied from the local download path to the ArmScripts folder.
               // Any changes to this handling can be considered in future enhancements.
-              // For now, only CustomPages are copied to the AxpertWeb folder as part of package installation.
+              // For now, only CustomPages are copied to the AxpertWeb folder as part of Product installation.
 
               continue;
               (*
@@ -1481,7 +1495,7 @@ begin
               fulldestpath := destpath + '\' + ExtractFileName(folderArray[Z]);
               writelog('Sourcepath : ' + fullsourcepath);
               writelog('Destinationpath : ' + fulldestpath);
-              PackageFindFile(fullsourcepath, fulldestpath); *)
+              ProductFindFile(fullsourcepath, fulldestpath); *)
             end;
           end;
         end;
@@ -1507,7 +1521,7 @@ begin
 
             fulldestpath := destpath + projectname + '\HTMLPages';
             ForceDirectories(fulldestpath);
-            PackageFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
+            ProductFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
           end;
 
           // js
@@ -1515,7 +1529,7 @@ begin
           begin
             fulldestpath := destpath + projectname + '\HTMLPages' + '\js';
             ForceDirectories(fulldestpath);
-            PackageFindFile(fullsourcepath + 'js', fulldestpath);
+            ProductFindFile(fullsourcepath + 'HTMLPages\js', fulldestpath);
           end;
 
           // css
@@ -1523,27 +1537,27 @@ begin
           begin
             fulldestpath := destpath + projectname + '\HTMLPages' + '\css';
             ForceDirectories(fulldestpath);
-            PackageFindFile(fullsourcepath + 'css', fulldestpath);
+            ProductFindFile(fullsourcepath + 'HTMLPages\css', fulldestpath);
           end;
         end
         else if SameText(ExtractFileName(folderArray[I]), cAxpertStructures) then
         begin
           // Structures are consumed by InstallAxpertStructures from the
-          // package-local source tree. Do not copy them as web files.
-          WriteLog('Skipping package Structures in PackageInstallWebFiles: ' +
+          // Product-local source tree. Do not copy them as web files.
+          WriteLog('Skipping Product Structures in ProductInstallWebFiles: ' +
             folderArray[I]);
           Continue;
         end
         else
         begin
-          // Currently, only CustomPages are copied to the AxpertWeb folder during package installation.
-          // Other folders such as Structures, Scripts, and PackageScripts remain in the local download
+          // Currently, only CustomPages are copied to the AxpertWeb folder during Product installation.
+          // Other folders such as Structures, Scripts, and ProductScripts remain in the local download
           // folder and are processed directly from there as required.
           //   - Structures are imported from the local download path.
           //   - Scripts are executed from the local download path.
-          //   - PackageScripts are copied from the local download path to the ArmScripts folder.
+          //   - ProductScripts are copied from the local download path to the ArmScripts folder.
           // Any changes to this handling can be considered in future enhancements.
-          // For now, only CustomPages are copied to the AxpertWeb folder as part of package installation.
+          // For now, only CustomPages are copied to the AxpertWeb folder as part of Product installation.
 
           continue;
           (*
@@ -1558,7 +1572,7 @@ begin
             ExtractFileName(folderArray[I]), '\\+', '\');
           writelog('Sourcepath : ' + fullsourcepath);
           writelog('Destinationpath : ' + fulldestpath);
-          PackageFindFile(fullsourcepath, fulldestpath); *)
+          ProductFindFile(fullsourcepath, fulldestpath); *)
         end;
       end;
     end;
@@ -1567,14 +1581,14 @@ begin
     begin
       ReadErrorList(E.Message);
       Console_write('Error: ' + E.Message, 12);
-      writelog('Error in PackageFindFile function while processing ' +
+      writelog('Error in ProductFindFile function while processing ' +
         ExtractFileName(Sourcepath) + ' file');
       writelog('Error : ' + E.Message);
       AppWriteln;
       AppReadln;
     end;
   end;
-  writelog('PackageFindFile function ends...');
+  writelog('ProductFindFile function ends...');
 end;
 
 
@@ -1777,5 +1791,222 @@ end;
   end;
 
   end; *)
+
+function TInstallation.GetStoredVersionFromDB(
+  const ProductOrCRName: string): string;
+var
+  pkgXDS: TXDS;
+begin
+  Result := '';
+  pkgXDS := nil;
+
+  WriteLog('GetStoredVersionFromDB - Start');
+  WriteLog('Name : ' + ProductOrCRName);
+
+  try
+    try
+      WriteLog('Creating XDS object for retrieving stored version');
+
+      pkgXDS := dbm.GetXDS(nil);
+
+      if not Assigned(pkgXDS) then
+        raise Exception.Create(
+          'Unable to create XDS object for retrieving stored version.');
+
+      WriteLog('XDS object created successfully');
+
+      pkgXDS.Buffered := True;
+
+      WriteLog('XDS Buffered mode enabled');
+
+      if selectedProduct <> '' then
+       pkgXDS.CDS.CommandText :=
+        'SELECT product_version ' +
+        'FROM axi_installed_products ' +
+        'WHERE product_name = :product_name ' +
+        'AND installation_status = ''Installed'' ' +
+        'ORDER BY installed_on DESC ' +
+        'LIMIT 1';
+
+     if selectedCR <> '' then
+       pkgXDS.CDS.CommandText :=
+        'SELECT product_version ' +
+        'FROM axi_installed_products ' +
+        'WHERE product_name = :product_name ' +
+        'AND installation_status = ''Installed'' ' +
+        'ORDER BY installed_on DESC ' +
+        'LIMIT 1';
+
+      WriteLog('Latest version query prepared');
+
+      pkgXDS.CDS.Params.ParamValues['product_name'] := ProductOrCRName;
+
+      WriteLog('Product name parameter assigned');
+      WriteLog('Executing latest version query');
+
+      pkgXDS.Open;
+
+      WriteLog('Latest version query executed successfully');
+
+      if not pkgXDS.CDS.Eof then
+      begin
+        Result := pkgXDS.CDS.FieldByName('product_version').AsString;
+
+        WriteLog('Stored version found : ' + Result);
+      end
+      else
+      begin
+        WriteLog(
+          'No installed version found : ' + ProductOrCRName);
+      end;
+
+      pkgXDS.Close;
+
+      WriteLog('XDS closed successfully');
+      WriteLog('GetStoredVersionFromDB - Completed');
+
+    except
+      on E: Exception do
+      begin
+        WriteLog('GetStoredVersionFromDB - FAILED');
+        WriteLog('Name : ' + ProductOrCRName);
+        WriteLog('Exception Class : ' + E.ClassName);
+        WriteLog('Error : ' + E.Message);
+
+        Result := '';
+
+        raise;
+      end;
+    end;
+
+  finally
+    if Assigned(pkgXDS) then
+    begin
+      WriteLog('Freeing XDS object');
+
+      FreeAndNil(pkgXDS);
+
+      WriteLog('XDS object freed successfully');
+    end;
+
+    WriteLog('GetStoredVersionFromDB - End');
+  end;
+end;
+
+procedure TInstallation.StoreLatestVersionToDb(
+  const ProductOrCRName: string;
+  const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+var
+  pkgXDS: TXDS;
+begin
+  pkgXDS := nil;
+
+  WriteLog('StoreLatestVersionToDb - Start');
+  WriteLog('Name : ' + ProductOrCRName);
+  WriteLog('Version : ' + ProductOrCRVersion);
+
+  try
+    try
+      WriteLog('Creating XDS object for storing Product version');
+
+      if not Assigned(dbm) then
+      begin
+        WriteLog('StoreLatestVersionToDb - FAILED');
+        WriteLog('Error : Database manager (dbm) is not assigned.');
+
+        raise Exception.Create(
+          'Database manager (dbm) is not assigned.'
+        );
+      end;
+
+      pkgXDS := dbm.GetXDS(nil);
+
+      if not Assigned(pkgXDS) then
+        raise Exception.Create(
+          'Unable to create XDS object for storing Product version.');
+
+      WriteLog('XDS object created successfully');
+
+      WriteLog('Creating XDS insert for axi_installed_products');
+
+      pkgXDS.Append('axi_installed_products');
+
+      WriteLog('XDS.Append completed');
+
+      WriteLog('Submitting id');
+      pkgXDS.Submit('id',floattostr(dbm.Gen_id(dbm.connection)), 'n');
+
+      WriteLog('Submitting product_id : '+AxIns_ProductID);
+      pkgXDS.Submit('product_id',AxIns_ProductID, 'c');
+
+      WriteLog('Submitting product_name : ' + ProductOrCRName);
+      pkgXDS.Submit('product_name', ProductOrCRName, 'c');
+
+      WriteLog('Submitting product_version : ' + ProductOrCRVersion);
+      pkgXDS.Submit('product_version', ProductOrCRVersion, 'c');
+
+      WriteLog('Submitting product_type default value Product');
+      pkgXDS.Submit('product_type',installtype, 'c');
+
+      WriteLog('Submitting repository_name');
+      pkgXDS.Submit('repository_name', '', 'c');
+
+      if selectedProduct <>  '' then
+      begin
+      WriteLog('Submitting repository_url : '+gitProducturl + selectedProduct+ '/' + requestedVersion);
+      pkgXDS.Submit('repository_url',gitProducturl, 'c');
+      end;
+
+      if selectedCR <>  '' then
+      begin
+      WriteLog('Submitting repository_url : '+gitChangeRequesturl + selectedCR+ '/' + requestedVersion);
+      pkgXDS.Submit('repository_url',gitChangeRequesturl, 'c');
+      end;
+
+      WriteLog('Submitting branch_name defautl value : main');
+      pkgXDS.Submit('branch_name','main', 'c');
+
+      WriteLog('Submitting installed_by : '+AxIns_Username);
+      pkgXDS.Submit('installed_by',AxIns_Username, 'c');
+
+      WriteLog('Submitting installation_status : '+ResultOfInstallation);
+      pkgXDS.Submit('installation_status',ResultOfInstallation, 'c');
+
+      WriteLog('Submitting installation_remarks : '+ResultOfInstallMsg);
+      pkgXDS.Submit('installation_remarks',ResultOfInstallMsg, 'c');
+
+      WriteLog('Posting installation record');
+
+      pkgXDS.Post;
+
+      WriteLog('Installation record stored successfully');
+      WriteLog('StoreLatestVersionToDb - Completed');
+
+    except
+      on E: Exception do
+      begin
+        WriteLog('StoreLatestVersionToDb - FAILED');
+        WriteLog('Name : ' + ProductOrCRName);
+        WriteLog('Version : ' + ProductOrCRVersion);
+        WriteLog('Exception Class : ' + E.ClassName);
+        WriteLog('Error : ' + E.Message);
+
+        raise;
+      end;
+    end;
+
+  finally
+    if Assigned(pkgXDS) then
+    begin
+      WriteLog('Freeing XDS object');
+
+      FreeAndNil(pkgXDS);
+
+      WriteLog('XDS object freed successfully');
+    end;
+
+    WriteLog('StoreLatestVersionToDb - End');
+  end;
+end;
 
 end.

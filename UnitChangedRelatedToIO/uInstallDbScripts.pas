@@ -71,8 +71,10 @@ begin
     // AxScriptPath := patchLocalPath + selectedPlugin + '\' + cDBScripts + '\';
     if patchOrPlugin = 'Plugin' then
       AxScriptPath := { patchLocalPath } pluginLocalPath + selectedPlugin + '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
-    if patchOrPlugin = 'Package' then
-      AxScriptPath := packageLocalPath + selectedPackage + '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
+    if patchOrPlugin = 'Product' then
+      AxScriptPath := ProductLocalPath + selectedProduct +'\'+requestedVersion+ '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
+    if patchOrPlugin = 'ChangeRequest' then
+      AxScriptPath := ChangeRequestLocalPath + selectedCR +'\'+requestedVersion+ '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
 
     if not directoryexists(AxScriptPath) then
     begin

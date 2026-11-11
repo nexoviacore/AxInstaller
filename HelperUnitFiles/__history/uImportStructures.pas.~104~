@@ -240,8 +240,8 @@ begin
 
     // TODO:
     // AES-256 CBC PKCS7 Decryption
-    // Key : AxiDataPackageAxpertExportImport
-    // IV  : AxiDataPackages1
+    // Key : AxiDataProductAxpertExportImport
+    // IV  : AxiDataProducts1
 
     Result := CipherText; // Temporary
 
@@ -294,7 +294,7 @@ begin
         FileContent.LoadFromFile(FileName);
         Result := FileContent.Text;
 
-        // Decrypt Data Package (.axidata) files
+        // Decrypt Data Product (.axidata) files
         if SameText(ExtractFileExt(FileName), '.axidata') then
         begin
           writelog('Decrypting axidata file : ' + ExtractFileName(FileName));
@@ -862,16 +862,15 @@ begin
     begin
       writelog('Structure imported successfully.');
 
-      Appwrite('-');
-      writelog('FileName adding .trn : ' + FileName);
+      Appwrite('   - ');
       Console_write(FileName + '.trn ', 10);
-      Appwriteln('Structure imported Successfully...!');
-
+      writelog('FileName adding .trn : ' + FileName);
+      Appwrite('Structure imported Successfully...!');
+      Appwriteln;
       writelog('Adding structure to AxStructures...');
       AxStructures.Add(FileName + '.trn');
       writelog('Added to AxStructures.');
-
-      Appwriteln;
+//      Appwriteln;
 
     end
     else
@@ -1189,7 +1188,7 @@ begin
 
     SignInRequest := PrepareSignInRequest;
     writelog('Calling SignIn URL : ' + SignInURL);
-    writelog('SignIn Request : ' + SignInRequest);
+//    writelog('SignIn Request : ' + SignInRequest);
     RequestStream := TStringStream.Create(SignInRequest, TEncoding.UTF8);
     ResponseStream := TStringStream.Create('', TEncoding.UTF8);
 
@@ -1396,7 +1395,7 @@ begin
   writelog('BuildAxPutRequest function started...');
 
   try
-    writelog('Parsing AxiData package JSON.');
+    writelog('Parsing AxiData Product JSON.');
 
     AxPutJsonRequest := NormalizeJsonString(AxDataJson);
     // Need to check this   | handling \" and \
@@ -1405,11 +1404,11 @@ begin
 //    AxPutJsonRequest := StringReplace(AxPutJsonRequest, '\', '\\', [rfReplaceAll]);
 //    AxPutJsonRequest := StringReplace(AxPutJsonRequest, '#dq#', '\"', [rfReplaceAll]);
 
-    writelog('AxiData JSON '+AxDataJson);
+//    writelog('AxiData JSON '+AxDataJson);
     RootObj := TJSONObject.ParseJSONValue(AxPutJsonRequest) as TJSONObject;
 
     if RootObj = nil then
-      raise Exception.Create('Invalid AxiData package JSON.');
+      raise Exception.Create('Invalid AxiData Product JSON.');
 
     writelog('AxiData JSON parsed successfully.');
 
@@ -1562,13 +1561,13 @@ begin
   writelog('InstallDataJson function started.');
   try
     FileName := ExtractFileName(ADataJsonFile);
-    writelog('Processing AxiData Package : ' + FileName);
+    writelog('Processing AxiData Product : ' + FileName);
     Console_write('   - Processing AxiData Json File ' + FileName + '.', 10);
     Appwriteln;
 
-    writelog('Reading AxiData package.');
+    writelog('Reading AxiData Product.');
     AxPutRequest := ReadFile(ADataJsonFile);
-    writelog('AxiData package loaded successfully.');
+    writelog('AxiData Product loaded successfully.');
 
     // hardcoded for now, need to enhance to be read from appsettings
     // SignInURL := 'https://agileqa.agilecloud.biz/armnew/api/v1/Signin';
@@ -1613,9 +1612,9 @@ begin
         AxPutPayloadObj.Free;
       end;
 
-      writelog('Submitting package to AxPut API.');
+      writelog('Submitting Product to AxPut API.');
       DoAxPut(ArmAxPutUrl, AxPutRequest, ARMSessionId, Token);
-      writelog('Package imported successfully.');
+      writelog('Product imported successfully.');
       Result := True;
 
       Console_write('   - AxiData Json File ' + FileName +' imported successfully.', 10);

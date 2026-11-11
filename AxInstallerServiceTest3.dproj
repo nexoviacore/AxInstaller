@@ -89,8 +89,8 @@
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
-        <DCC_DcuOutput>D:\AxInstallerRest - Copy\ServiceOutput\Dcus\</DCC_DcuOutput>
-        <DCC_ExeOutput>D:\AxInstallerRest - Copy\ServiceOutput</DCC_ExeOutput>
+        <DCC_DcuOutput>D:\AxInsGIT-Output\ServiceOutput\Dcus\</DCC_DcuOutput>
+        <DCC_ExeOutput>D:\AxInsGIT-Output\ServiceOutput</DCC_ExeOutput>
         <DCC_UnitSearchPath>D:\Supporting Files\__Supporting Files\PNGComponents-master\Source;D:\Supporting Files\__Supporting Files\PowerPDFXe3;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\System;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Protocols;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Core;C:\Program Files (x86)\Devart\dbExpress\PostgreSql\Lib\Delphi17\Win64;D:\Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17x64;C:\Program Files (x86)\Devart\Dbx\MySql\Lib\Delphi17\Win64;D:\Supporting Files\__Supporting Files\REDIS CLIENT - DELPHI XE3 Support;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>

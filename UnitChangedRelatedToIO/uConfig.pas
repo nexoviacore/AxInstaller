@@ -519,10 +519,15 @@ begin
     else
       GitPluginUrl := '';
 
-    if assigned(JSONObject.Get('gitpackageurl')) then
-      GitPackageUrl := Trim(JSONObject.Get('gitpackageurl').JsonValue.Value)
+    if assigned(JSONObject.Get('gitproducturl')) then
+      GitProductUrl := Trim(JSONObject.Get('gitproducturl').JsonValue.Value)
     else
-      GitPackageUrl := '';
+      GitProductUrl := '';
+
+    if assigned(JSONObject.Get('gitchangerequesturl')) then
+      gitChangeRequesturl := Trim(JSONObject.Get('gitchangerequesturl').JsonValue.Value)
+    else
+      gitChangeRequesturl := '';
 
     if assigned(JSONObject.Get('armsigninurl')) then
       ArmSignInUrl := Trim(JSONObject.Get('armsigninurl').JsonValue.Value)
@@ -542,9 +547,53 @@ begin
     SetPatchLocalPath;
     writelog('Git Url : ' + GitPatchURL);
     writelog('Git Plugin Url : ' + GitPluginUrl);
-    writelog('Git Package Url : ' + GitPackageUrl);
+    writelog('Git Product Url : ' + GitProductUrl);
+    writelog('Git Change Request Url : ' + gitchangerequesturl);
     writelog('ARM Base Url : ' + ArmBaseUrl);
     writelog('Got password in decrypted format');
+
+    //Temp url change
+    {$IFNDEF CONSOLE_APP}
+    if (TempGitRepo <> '') and (TempGitAcc <> '') and (installtype <> '') then
+begin
+  WriteLog('TempGitAcc: ' + TempGitAcc);
+  WriteLog('TempGitRepo: ' + TempGitRepo);
+
+  if lowercase(installtype) = 'plugin' then
+  begin
+    WriteLog('Original GitPluginURL: ' + GitPluginURL);
+
+    GitPluginURL := 'https://api.github.com/repos/' +
+                    TempGitAcc + '/' + TempGitRepo + '/contents/';
+
+    WriteLog('Updated GitPluginURL: ' + GitPluginURL);
+  end
+  else if lowercase(installtype) = 'product' then
+  begin
+    WriteLog('Original GitProductURL: ' + GitProductURL);
+
+    GitProductURL := 'https://api.github.com/repos/' +
+                     TempGitAcc + '/' + TempGitRepo + '/contents/';
+
+    WriteLog('Updated GitProductURL: ' + GitProductURL);
+  end
+  else if lowercase(installtype) = 'changerequest' then
+  begin
+    WriteLog('Original GitChangeRequestURL: ' + GitChangeRequestURL);
+
+    GitChangeRequestURL := 'https://api.github.com/repos/' +
+                           TempGitAcc + '/' + TempGitRepo + '/contents/';
+
+    WriteLog('Updated GitChangeRequestURL: ' + GitChangeRequestURL);
+  end;
+end
+else
+begin
+  WriteLog('Temporary Git account or repository not provided. Keeping default Git URL.');
+end;
+{$ENDIF};
+
+
     writelog('readReleasePasswordandGitUrl function ends..');
   finally
     Freeandnil(dbm);

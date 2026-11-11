@@ -93,14 +93,24 @@ begin
       LoacalDir := { patchlocalpath } pluginLocalPath + selectedplugin + '\' +
         cPluginScript + '\';
   end
-  else if patchOrPlugin = 'Package' then
+ //Need to verify & optimize accordingly
+  else if patchOrPlugin = 'Product' then
   begin
-    writelog('Copying files to corresponding Package Script folder from the local plugin directory.');
-    pluginpath := armapipath + '\' + cPackageAPI + '\';
+    writelog('Copying files to corresponding Product Script folder from the local plugin directory.');
+    pluginpath := armapipath + '\' + cProductAPI + '\';
     pluginpath := stringReplace(pluginpath, '\\', '\', [rfReplaceAll]);
     destinationpath := pluginpath;
     Appwriteln;
-    LoacalDir := packageLocalPath + selectedplugin + '\' + cPluginScript + '\';
+    LoacalDir := ProductLocalPath + selectedProduct + '\' +requestedVersion + '\' + cPluginScript + '\';
+  end
+  else if patchOrPlugin = 'ChangeRequest' then
+  begin
+    writelog('Copying files to corresponding ChangeRequest Script folder from the local plugin directory.');
+    pluginpath := armapipath + '\' + cChangeRequestAPI + '\';
+    pluginpath := stringReplace(pluginpath, '\\', '\', [rfReplaceAll]);
+    destinationpath := pluginpath;
+    Appwriteln;
+    LoacalDir := ChangeRequestLocalPath + selectedCR + '\' +requestedVersion + '\' + cPluginScript  + '\';
   end;
 
   if not directoryexists(LoacalDir) then

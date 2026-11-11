@@ -102,6 +102,14 @@ type
     function findfolder(sourcepath: string; destpath: string): string;
     function IIsStatus(): string;
     function ReloadConfig(): string;
+
+    function GetLatestVersion(): string;
+    procedure StoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+    function GetAndStoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string;
+      IsGet: Boolean): string;
+    function CompareProductVersion(const RequestedVersion,
+      InstalledVersion: string): Integer;
+
     // procedure PullPluginOperation;
     procedure WriteUserInstructions;
     procedure startplugin;
@@ -307,7 +315,8 @@ begin
   tempDBConnectionName := '';
   MultiProjConnNames := '';
   bConnectTempDB := False;
-  IsPackageInstall := False;
+  IsProductInstall := False;
+  IsCRInstall := False;
   bGitPullIncomplete := False; // Pull completed successfully
   // AppDir := IncludeTrailingBackslash(GetCurrentDir);
 
@@ -438,12 +447,13 @@ begin
 
   pluginLocalPath := AppDir + cPlugins + '\';
   patchLocalPath := AppDir + cReleases + '\';
-  packageLocalPath := AppDir + cPackages + '\';
+  ProductLocalPath := AppDir + cProducts + '\';
+  ChangeRequestLocalPath := AppDir + cChangeRequests + '\';
 
   // uConfig - SetPatchLocalPath - patchLocalPath value updated
   ForceDirectories(pluginLocalPath);
   ForceDirectories(patchLocalPath);
-  ForceDirectories(packageLocalPath);
+  ForceDirectories(ProductLocalPath);
 
   bDBConDuring_Install := True;
 end;
@@ -769,7 +779,7 @@ var
   splitedpatch1index, splitedpatch2index: integer;
   userconfirmation, dbconnectionname: string;
   plugname, verName, PatcName, CommandFromFile, Act_Active_Conn: string;
-
+  AlreadyInstalledVersion,GetAndStoreVar: string;
   BulkCommandList: TStringList;
 
   // New identifier for new bulkinstall
@@ -791,7 +801,8 @@ begin
       Act_Active_Conn := '';
       commandWord := Command;
       slUserInstructions.clear;
-      IsPackageInstall := False;
+      IsProductInstall := False;
+      IsCRInstall := False;
       bGitPullIncomplete := False; // Pull completed successfully
       writelog('');
       writelog('Executing Command : ' +Command);
@@ -1604,7 +1615,7 @@ begin
                               selectedversion := splitedversion;
                               // versionarray[I];
                               selectedpatch := Patcharray[Y];
-                              patchOrPlugin := 'Release'
+                              patchOrPlugin := 'Release';
                               appwriteln;
                               appwriteln
                                 (Uppercase('Installing ' + Patcharray[Y]));
@@ -1738,7 +1749,7 @@ begin
                           begin
                             selectedversion := splitedversion;
                             selectedpatch := Patcharray[Y];
-                            patchOrPlugin := 'Release'
+                            patchOrPlugin := 'Release';
                             appwriteln;
                             appwriteln
                               (Uppercase('Installing ' + Patcharray[Y]));
@@ -1923,7 +1934,7 @@ begin
                                 selectedversion := splitedversion;
                                 // versionarray[I];
                                 selectedpatch := Patcharray[T];
-                                patchOrPlugin := 'Release'
+                                patchOrPlugin := 'Release';
                                 appwriteln;
                                 appwriteln
                                   (Uppercase('Installing ' + Patcharray[T]));
@@ -2053,6 +2064,7 @@ begin
                               appwriteln;
                               selectedversion := splitedversion;
                               selectedpatch := Patcharray[T];
+                              patchOrPlugin := 'Release';
                               appwriteln;
                               appwriteln
                                 (Uppercase('Installing ' + Patcharray[T]));
@@ -2364,6 +2376,7 @@ begin
                       begin
                         selectedversion := splitedversion; // versionarray[I];
                         selectedpatch := Patcharray[Y];
+                        patchOrPlugin := 'Release';
                         appwriteln;
                         appwriteln(Uppercase('Installing ' + Patcharray[Y]));
                         appwriteln('==============================');
@@ -2614,7 +2627,7 @@ begin
                         appwriteln(Uppercase('Installing ' + Patcharray[T]));
                         appwriteln('==============================');
                         appwriteln;
-                        HandleStructureInstallation(selectedpatch);
+                        HandleStructureInstallation(Patcharray[T]);
                         if connectionstatus then
                         begin
                           // commandstrlist := TStringList.Create;
@@ -3556,26 +3569,27 @@ begin
           commandstrlist := TStringList.Create;
           commandstrlist.Delimiter := ' ';
           commandstrlist.DelimitedText := Command;
-          // Package install command
+          // Product install command
           if (commandstrlist.Count >= 3) and
-            (lowercase(commandstrlist[1]) = 'package') then
+            (lowercase(commandstrlist[1]) = 'product') then
           begin
             try
-              IsPackageInstall := True;
-              selectedPackage := Trim(commandstrlist[2]);
+              IsProductInstall := True;
+              selectedProduct := Trim(commandstrlist[2]);
 {$IFNDEF CONSOLE_APP}
-              if IsPackageInstall then
+              if IsProductInstall then
               begin
                 InitializeInstallUpdatesToRedis(ArmBaseUrl, activeconnection,
-                  AxIns_Username, selectedPackage);
+                  AxIns_Username, selectedProduct);
                 PushInstallUpdateToRedis('', '', 'PREPARING');
               end;
 {$ENDIF};
 
-              if selectedPackage = '' then
+
+              if selectedProduct = '' then
               begin
                 writeln;
-                Console_write('Package name is missing.', 12);
+                Console_write('Product name is missing.', 12);
                 appwriteln;
 {$IFDEF CONSOLE_APP}
                 Command := instBeforeReadCommand;
@@ -3585,13 +3599,76 @@ begin
 {$ENDIF};
                 Exit;
               end;
-              patchOrPlugin := 'Package';
+
+
+              ///
+              // Version related changes
+              IsVersionInstall := False;
+              RequestedVersion := 'Latest';
+              if not assigned(database) then
+                  database := TDbConnect.Create;
+
+              database.DatabaseConnection();
+
+              if commandstrlist.Count >= 4 then
+              begin
+                RequestedVersion := Trim(commandstrlist[3]);
+                if LowerCase(RequestedVersion) = 'latest' then
+                begin
+                  WriteLog('Latest version requested. Skipping version comparison.');
+                end
+                else
+                begin
+                IsVersionInstall := True;
+
+                WriteLog('Given version to install: ' + RequestedVersion);
+
+                if IsVersionInstall then
+                begin
+                  AlreadyInstalledVersion := GetAndStoreLatestVersion('','','',True);
+                  WriteLog('The previous installed version is :'+AlreadyInstalledVersion);
+                  if (AlreadyInstalledVersion <> '') and
+                  (CompareProductVersion(LowerCase(RequestedVersion),LowerCase(AlreadyInstalledVersion)) <= 0)then
+                  begin
+                      WriteLog('The previous installed version is higher or may be equal, so exiting here');
+
+                      raise Exception.Create(
+                        'Already Latest Version ' + AlreadyInstalledVersion +
+                        ' is installed. Try next versions.'
+                      );
+                   end;
+                end;
+               end;
+              end;
+
+              if not IsVersionInstall then
+                WriteLog('Version is not given so default version is getting installed: ' + RequestedVersion);
+
+              patchOrPlugin := 'Product';
               appwriteln;
-              Console_write('Installing Package : ' + selectedPackage, 14);
-              WriteLog('Installing Package : ' + selectedPackage);
+              Console_write('Installing Product : ' + selectedProduct, 14);
+              WriteLog('Installing Product : ' + selectedProduct);
               appwriteln;
 
-              HandleInstallationCommand(selectedPackage);
+              HandleInstallationCommand(selectedProduct);
+
+             if (VersionTakenFromVersionInfo <> '') and
+               (VersionTakenFromVersionInfo <> requestedVersion) then
+             begin
+                requestedVersion := VersionTakenFromVersionInfo;
+             end;
+
+             if InstallErrMsg <> '' then
+             begin
+               WriteLog('Installation has been Failed : '+InstallErrMsg);
+               GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Failed',InstallErrMsg,False);
+             end
+             else
+             begin
+                WriteLog('Installation has been completed successfully');
+                WriteLog('Installed Latest git version : '+requestedVersion);
+                GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Installed','Installed Successfully',False);
+             end;
 
               patchOrPlugin := '';
               Exit;
@@ -3600,12 +3677,149 @@ begin
               begin
                 InstallErrMsg := E.ClassName + ' : ' + E.Message;
                 Console_write('Error : ' + E.Message, 12);
-                WriteLog('Package installation failed. Error : ' + E.Message);
+                WriteLog('Product installation failed. Error : ' + E.Message);
+                WriteLog('Installation has been Failed : '+InstallErrMsg);
+
+                if (VersionTakenFromVersionInfo <> '') and
+                   (VersionTakenFromVersionInfo <> requestedVersion) then
+                 begin
+                    requestedVersion := VersionTakenFromVersionInfo;
+                 end;
+
+                GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Failed',InstallErrMsg,False);
                 patchOrPlugin := '';
                 Exit;
               end;
             end;
           end;
+
+          ///change request
+          ///
+          if (commandstrlist.Count >= 3) and
+            (lowercase(commandstrlist[1]) = 'changerequest') then
+          begin
+            try
+              IsCRInstall := True;
+              selectedCR := Trim(commandstrlist[2]);
+{$IFNDEF CONSOLE_APP}
+              if IsCRInstall then
+              begin
+                InitializeInstallUpdatesToRedis(ArmBaseUrl, activeconnection,
+                  AxIns_Username, selectedCR);
+                PushInstallUpdateToRedis('', '', 'PREPARING');
+              end;
+{$ENDIF};
+
+
+              if selectedCR = '' then
+              begin
+                writeln;
+                Console_write('ChangeRequest name is missing.', 12);
+                appwriteln;
+{$IFDEF CONSOLE_APP}
+                Command := instBeforeReadCommand;
+                parseCommand(Command);
+{$ELSE}
+                // RestImp
+{$ENDIF};
+                Exit;
+              end;
+
+
+              ///
+              // Version related changes
+              IsVersionInstall := False;
+              RequestedVersion := 'Latest';
+              if not assigned(database) then
+                  database := TDbConnect.Create;
+
+              database.DatabaseConnection();
+
+              if commandstrlist.Count >= 4 then
+              begin
+                RequestedVersion := Trim(commandstrlist[3]);
+                if LowerCase(RequestedVersion) = 'latest' then
+                begin
+                  WriteLog('Latest version requested. Skipping version comparison.');
+                end
+                else
+                begin
+                IsVersionInstall := True;
+
+                WriteLog('Given version to install: ' + RequestedVersion);
+
+                if IsVersionInstall then
+                begin
+                  AlreadyInstalledVersion := GetAndStoreLatestVersion('','','',True);
+                  WriteLog('The previous installed version is :'+AlreadyInstalledVersion);
+                  if (AlreadyInstalledVersion <> '') and
+                  (CompareProductVersion(LowerCase(RequestedVersion),LowerCase(AlreadyInstalledVersion)) <= 0)then
+                  begin
+                      WriteLog('The previous installed version is higher or may be equal, so exiting here');
+
+                      raise Exception.Create(
+                        'Already Latest Version ' + AlreadyInstalledVersion +
+                        ' is installed. Try next versions.'
+                      );
+                   end;
+                end;
+               end;
+              end;
+
+              if not IsVersionInstall then
+                WriteLog('Version is not given so default version is getting installed: ' + RequestedVersion);
+
+              patchOrPlugin := 'ChangeRequest';
+              appwriteln;
+              Console_write('Installing ChangeRequest : ' + selectedCR, 14);
+              WriteLog('Installing Product : ' + selectedCR);
+              appwriteln;
+
+              HandleInstallationCommand(selectedCR);
+
+             if (VersionTakenFromVersionInfo <> '') and
+               (VersionTakenFromVersionInfo <> requestedVersion) then
+             begin
+                requestedVersion := VersionTakenFromVersionInfo;
+             end;
+
+             if InstallErrMsg <> '' then
+             begin
+               WriteLog('Installation has been Failed : '+InstallErrMsg);
+               GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Failed',InstallErrMsg,False);
+             end
+             else
+             begin
+                WriteLog('Installation has been completed successfully');
+                WriteLog('Installed Latest git version : '+requestedVersion);
+                GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Installed','Installed Successfully',False);
+             end;
+
+              patchOrPlugin := '';
+              Exit;
+            except
+              on E: Exception do
+              begin
+                InstallErrMsg := E.ClassName + ' : ' + E.Message;
+                Console_write('Error : ' + E.Message, 12);
+                WriteLog('ChangeRequest installation failed. Error : ' + E.Message);
+                WriteLog('Installation has been Failed : '+InstallErrMsg);
+
+                if (VersionTakenFromVersionInfo <> '') and
+                   (VersionTakenFromVersionInfo <> requestedVersion) then
+                 begin
+                    requestedVersion := VersionTakenFromVersionInfo;
+                 end;
+
+                GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Failed',InstallErrMsg,False);
+                patchOrPlugin := '';
+                Exit;
+              end;
+            end;
+          end;
+
+
+
           // if comparestr(lowercase(pluginarray[A]), lowercase(commandWord)) = 0
           // then
           plugname := '';
@@ -4490,11 +4704,11 @@ begin
 {$ELSE}
 {$ENDIF};
       end
-      else if Pos('packageurl', lowercase(Command)) <> 0 then
+      else if Pos('producturl', lowercase(Command)) <> 0 then
       begin
         appwriteln;
-        write('Write package git url : ');
-        Appreadln(gitpackageurl);
+        appwrite('Write Product git url : ');
+        Appreadln(gitproducturl);
 
         JSONText := cfg.Readconfigfile();
         JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
@@ -4502,15 +4716,15 @@ begin
         Confound := False;
 
         for Pair in JSONObject do
-          if lowercase(Pair.JSONString.Value) = 'gitpackageurl' then
+          if lowercase(Pair.JSONString.Value) = 'gitproducturl' then
           begin
-            JSONObject.removepair('gitpackageurl');
-            JSONObject.addpair('gitpackageurl', gitpackageurl);
+            JSONObject.removepair('gitproducturl');
+            JSONObject.addpair('gitproducturl', gitproducturl);
             Confound := True;
             Break;
           end;
         if not Confound then
-          JSONObject.addpair('gitpackageurl', gitpackageurl);
+          JSONObject.addpair('gitproducturl', gitproducturl);
 
         AssignFile(UserJsonFile, 'appsetting.config');
         Rewrite(UserJsonFile);
@@ -4524,9 +4738,55 @@ begin
 
         JSONObject.Free;
 
-        appwriteln('Package git url updated successfully..!');
-        WriteLog('Package git url : ' + gitpackageurl);
-        WriteLog('Package git url updated successfully.');
+        appwriteln('Product git url updated successfully..!');
+        WriteLog('Product git url : ' + gitproducturl);
+        WriteLog('Product git url updated successfully.');
+
+        ReloadConfig();
+
+{$IFDEF CONSOLE_APP}
+        Command := instBeforeReadCommand;
+        parseCommand(Command);
+{$ELSE}
+{$ENDIF};
+      end
+      else if Pos('changerequesturl', lowercase(Command)) <> 0 then
+      begin
+        appwriteln;
+        write('Write changerequesturl git url : ');
+        Appreadln(gitchangerequesturl);
+
+        JSONText := cfg.Readconfigfile();
+        JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+
+        Confound := False;
+
+        for Pair in JSONObject do
+          if lowercase(Pair.JSONString.Value) = 'gitchangerequesturl' then
+          begin
+            JSONObject.removepair('gitchangerequesturl');
+            JSONObject.addpair('gitchangerequesturl', gitchangerequesturl);
+            Confound := True;
+            Break;
+          end;
+        if not Confound then
+          JSONObject.addpair('gitchangerequesturl', gitchangerequesturl);
+
+        AssignFile(UserJsonFile, 'appsetting.config');
+        Rewrite(UserJsonFile);
+
+        TotalJSONText := JSONObject.ToString;
+        TotalJSONText := StringReplace(TotalJSONText, '\', '\\',
+          [rfReplaceAll]);
+
+        appwriteln(UserJsonFile, TotalJSONText);
+        CloseFile(UserJsonFile);
+
+        JSONObject.Free;
+
+        appwriteln('ChangeRequest git url updated successfully..!');
+        WriteLog('ChangeRequest git url : ' + gitchangerequesturl);
+        WriteLog('ChangeRequest git url updated successfully.');
 
         ReloadConfig();
 
@@ -4924,6 +5184,7 @@ begin
       git.pullStructuresfromgit;
 
     bPullStructures := False;
+    insallstatus := 'Structure';
     try
       WriteLog('InstallPluginWithoutweb function started..');
       appwriteln;
@@ -4943,7 +5204,7 @@ end;
 
 function TMain.HandleInstallationCommand(installationType: string): string;
 var
-  Command: String;
+  Command,GetAndStoreVar: String;
 begin
   if not assigned(git) then
     git := TGitManager.Create;
@@ -4955,7 +5216,7 @@ begin
     pinst := TPatchinstallation.Create;
   pageNotFoundError := False;
 {$IFNDEF CONSOLE_APP}
-  if IsPackageInstall then
+  if IsProductInstall then
   begin
     PushInstallUpdateToRedis('', '', 'DOWNLOADING');
   end;
@@ -4964,16 +5225,28 @@ begin
   if bGitPullIncomplete then
   begin
     WriteLog('Git Pull Incomplete');
-    WriteLog('Failed to pull the package files from the Git repository. The package may not exist or could not be retrieved.');
+//    WriteLog('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
+//{$IFDEF CONSOLE_APP}
+//    // console
+//    Console_write
+//      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.',
+//      10);
+//{$ELSE}
+//    // raise exception
+//    raise Exception.Create
+//      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
+//{$ENDIF};
+
+    WriteLog('Installation cannot continue because one or more files were not successfully retrieved from the Git repository. The installation has been stopped to prevent incomplete or incorrect file placement.');
 {$IFDEF CONSOLE_APP}
     // console
     Console_write
-      ('Failed to pull the package files from the Git repository. The package may not exist or could not be retrieved.',
+      ('Installation cannot continue because one or more files were not successfully retrieved from the Git repository. The installation has been stopped to prevent incomplete or incorrect file placement.',
       10);
 {$ELSE}
     // raise exception
     raise Exception.Create
-      ('Failed to pull the package files from the Git repository. The package may not exist or could not be retrieved.');
+      ('Installation cannot continue because one or more files were not successfully retrieved from the Git repository. The installation has been stopped to prevent incomplete or incorrect file placement.');
 {$ENDIF};
     bGitPullIncomplete := False;
     appwriteln;
@@ -4988,16 +5261,16 @@ begin
   if PageNotFoundError then
   begin
     WriteLog('PageNotFoundError');
-    WriteLog('Failed to pull the package files from the Git repository. The package may not exist or could not be retrieved.');
+    WriteLog('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
 {$IFDEF CONSOLE_APP}
     // console
     Console_write
-      ('Failed to pull the package files from the Git repository. The package may not exist or could not be retrieved.',
+      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.',
       10);
 {$ELSE}
     // raise exception
     raise Exception.Create
-      ('Failed to pull the package files from the Git repository. The package may not exist or could not be retrieved.');
+      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
 {$ENDIF};
     PageNotFoundError := False;
     appwriteln;
@@ -5029,6 +5302,7 @@ begin
   end;
   if patchOrPlugin = 'Plugin' then
   begin
+    insallstatus := 'Full';
     inst.InstallPlugin(installationType);
     database.DatabaseConnection();
     database.installOperation();
@@ -5060,23 +5334,58 @@ begin
     // nothing
 {$ENDIF}
   end;
-  if patchOrPlugin = 'Package' then
+  if patchOrPlugin = 'Product' then
   begin
 {$IFNDEF CONSOLE_APP}
-    if IsPackageInstall then
+    if IsProductInstall then
     begin
       PushInstallUpdateToRedis('', '', 'EXTRACTING');
     end;
 {$ENDIF};
-    ExtractZipFiles(packageLocalPath + selectedPackage);
-    inst.InstallPackage(installationType);
-    database.DatabaseConnection();
+    ExtractZipFiles(ProductLocalPath + selectedProduct +'\'+requestedVersion);
+    inst.InstallProduct(installationType);
+    //database.DatabaseConnection();
     database.installOperation();
     appwriteln(' INSTALLATION SUMMARY  ');
     appwriteln('=======================');
     appwriteln;
     AppWrite('  -');
-    Console_write(selectedPackage, 3);
+    Console_write(selectedProduct, 3);
+    AppWrite(' installation completed without errors.');
+    WriteUserInstructions;
+    appwriteln;
+    appwriteln;
+    AppWrite('AxInstaller> ');
+
+{$IFDEF CONSOLE_APP}
+    Command := ReadInput;
+
+    if Command = '' then
+      parseCommand(Command)
+    else
+      parseCommand(Command);
+{$ELSE}
+    // nothing
+{$ENDIF}
+  end;
+
+   if patchOrPlugin = 'ChangeRequest' then
+  begin
+{$IFNDEF CONSOLE_APP}
+    if IsCRInstall then
+    begin
+      PushInstallUpdateToRedis('', '', 'EXTRACTING');
+    end;
+{$ENDIF};
+    ExtractZipFiles(ChangeRequestLocalPath + selectedCR +'\'+requestedVersion);
+    inst.InstallProduct(installationType);
+    //database.DatabaseConnection();
+    database.installOperation();
+    appwriteln(' INSTALLATION SUMMARY  ');
+    appwriteln('=======================');
+    appwriteln;
+    AppWrite('  -');
+    Console_write(selectedCR, 3);
     AppWrite(' installation completed without errors.');
     WriteUserInstructions;
     appwriteln;
@@ -5249,11 +5558,16 @@ begin
     'It will add new/update git url for plugin repository.');
   appwriteln;
   appwriteln;
-  Console_write('config set packageurl', 10);
+  Console_write('config set producturl', 10);
   AppWrite('' + #9 + #9 + #9 + #9 +
-    'It will add new/update git url for package repository.');
+    'It will add new/update git url for product repository.');
   appwriteln;
   appwriteln;
+//  Console_write('config set changerequesturl', 10);
+//  AppWrite('' + #9 + #9 + #9 + #9 +
+//    'It will add new/update git url for changerequest repository.');
+//  appwriteln;
+//  appwriteln;
   Console_write('list plugins', 10);
   AppWrite('' + #9 + #9 + #9 + #9 + #9 +
     'Lists all available plugins from the GIT repository.');
@@ -5278,12 +5592,18 @@ begin
 
   appwriteln;
   appwriteln;
-  Console_write('install package <package_name>', 10);
+  Console_write('install product <product_name>', 10);
   AppWrite('' + #9 + #9 + #9 +
-    'Pulls the selected package from the GIT repository and installs it into the target application.');
+    'Pulls the selected product from the GIT repository and installs it into the target application.');
 
   appwriteln;
   appwriteln;
+//  Console_write('install changerequest <changerequest_name>', 10);
+//  AppWrite('' + #9 + #9 + #9 +
+//    'Pulls the selected changerequest from the GIT repository and installs it into the target application.');
+//
+//  appwriteln;
+//  appwriteln;
   Console_write('install <product_version> <release_name>', 10);
   AppWrite('' + #9 +
     'Pulls the selected release from the GIT repository and installs/applies it to the target application.');
@@ -5621,5 +5941,347 @@ end;
   //DestroyLogObj;
   slUserInstructions.Free;
   end; *)
+
+//function TMain.GetLatestVersion(): string;
+//var
+//  XDS: TXDS;
+//begin
+//  Result := '';
+//
+//  WriteLog('GetLatestVersion - Start');
+//  WriteLog('Product Name : ' + selectedProduct);
+//
+//  XDS := nil;
+//
+//  try
+//    WriteLog('Creating XDS object');
+//
+//    //XDS := Axpro1.dbm.GetXDS(nil);
+//    XDS := axp.dbm.GetXDS(nil);
+//
+//    XDS.Buffered := True;
+//
+//    WriteLog('XDS object created successfully');
+//
+//    XDS.CDS.CommandText :=
+//      'SELECT product_version ' +
+//      'FROM axi_installed_products ' +
+//      'WHERE product_name = :product_name ' +
+//      'AND installation_status = ''Installed'' ' +
+//      'ORDER BY installed_on DESC ' +
+//      'LIMIT 1';
+//
+//    XDS.CDS.Params.ParamValues['product_name'] := selectedProduct;
+//
+//    WriteLog('Latest version query prepared');
+//    WriteLog('Executing latest version query');
+//
+//    XDS.Open;
+//
+//    WriteLog('Latest version query executed successfully');
+//
+//    if not XDS.CDS.Eof then
+//    begin
+//      Result := XDS.CDS.FieldByName('product_version').AsString;
+//
+//      WriteLog('Latest installed version found : ' + Result);
+//    end
+//    else
+//    begin
+//      WriteLog('No installed version found for product : ' + selectedProduct);
+//      Result := '';
+//    end;
+//
+//    XDS.Close;
+//
+//    WriteLog('GetLatestVersion - Completed');
+//
+//  except
+//    on E: Exception do
+//    begin
+//      WriteLog('GetLatestVersion - FAILED');
+//      WriteLog('Product Name : ' + selectedProduct);
+//      WriteLog('Error : ' + E.Message);
+//
+//      raise;
+//    end;
+//  finally
+//    if Assigned(XDS) then
+//    begin
+//      WriteLog('Freeing XDS object');
+//      FreeAndNil(XDS);
+//    end;
+//  end;
+//end;
+//
+//procedure TMain.StoreLatestVersion(const ProductVersion: string);
+//var
+//  XDS: TXDS;
+//begin
+//  XDS := nil;
+//  WriteLog('Storing Latest Version : ' + ProductVersion);
+//
+//  //
+//  try
+//    WriteLog('Product Name : ' + selectedProduct);
+//    WriteLog('Product Version : ' + ProductVersion);
+//
+//    WriteLog('Creating XDS object');
+//    XDS := TXDS.Create('q1', nil, dbm.Connection,dbm.gf);;
+//    WriteLog('XDS object created successfully');
+//
+//    WriteLog('Creating XDS insert for axi_installed_products');
+//
+//    XDS.Append('axi_installed_products');
+//    WriteLog('XDS.Append completed');
+//
+//    WriteLog('Submitting product_id');
+//    XDS.Submit('product_id', '', 'c');
+//
+//    WriteLog('Submitting product_name : ' + selectedProduct);
+//    XDS.Submit('product_name', selectedProduct, 'c');
+//
+//    WriteLog('Submitting product_version : ' + ProductVersion);
+//    XDS.Submit('product_version', ProductVersion, 'c');
+//
+//    WriteLog('Submitting product_type');
+//    XDS.Submit('product_type', '', 'c');
+//
+//    WriteLog('Submitting repository_name');
+//    XDS.Submit('repository_name', '', 'c');
+//
+//    WriteLog('Submitting repository_url');
+//    XDS.Submit('repository_url', '', 'c');
+//
+//    WriteLog('Submitting branch_name');
+//    XDS.Submit('branch_name', '', 'c');
+//
+//    WriteLog('Submitting installed_by');
+//    XDS.Submit('installed_by', '', 'c');
+//
+//    WriteLog('Submitting installation_status');
+//    XDS.Submit('installation_status', '', 'c');
+//
+//    WriteLog('Submitting installation_remarks');
+//    XDS.Submit('installation_remarks', '', 'c');
+//
+//    WriteLog('Posting product installation record');
+//    XDS.Post;
+//
+//    WriteLog('Product installation record stored successfully');
+//    WriteLog('StoreLatestVersion - Completed');
+//
+//  except
+//    on E: Exception do
+//    begin
+//      WriteLog('StoreLatestVersion - FAILED');
+//      WriteLog('Product Name : ' + selectedProduct);
+//      WriteLog('Product Version : ' + ProductVersion);
+//      WriteLog('Error : ' + E.Message);
+//
+//      raise;
+//    end;
+//  finally
+//    if Assigned(XDS) then
+//    begin
+//      WriteLog('Freeing XDS object');
+//      XDS.Free;
+//    end;
+//  end;
+//  //
+//end;
+
+procedure TMain.StoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+var
+  Installation: TInstallation;
+begin
+  WriteLog('StoreLatestVersion - Start');
+
+  if selectedProduct<>'' then
+   WriteLog('Product Name : ' + selectedProduct);
+
+
+  if selectedCR<>'' then
+   WriteLog('ChangeRequest Name : ' + selectedCR);
+
+
+  WriteLog('Version : ' + ProductOrCRVersion);
+
+  Installation := nil;
+ try
+  try
+    WriteLog('Creating TInstallation object');
+
+    Installation := TInstallation.Create;
+
+    WriteLog('TInstallation object created successfully');
+
+  if selectedProduct<>'' then
+    Installation.StoreLatestVersionToDb(selectedProduct,ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg);
+
+  if selectedCR<>'' then
+    Installation.StoreLatestVersionToDb(selectedCR,ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg);
+
+    WriteLog('StoreLatestVersionToDb completed successfully');
+    WriteLog('StoreLatestVersion - Completed');
+
+  except
+    on E: Exception do
+    begin
+      WriteLog('StoreLatestVersion - FAILED');
+
+      if selectedProduct <> '' then
+        WriteLog('Product Name : ' + selectedProduct);
+
+      if selectedCR<>'' then
+        WriteLog('ChangeRequest Name : ' + selectedCR);
+
+      WriteLog('Version : ' + ProductOrCRVersion);
+      WriteLog('Exception Class : ' + E.ClassName);
+      WriteLog('Error : ' + E.Message);
+
+      raise;
+    end;
+  end;
+  finally
+    if Assigned(Installation) then
+    begin
+      WriteLog('Freeing TInstallation object');
+
+      Installation.Free;
+
+      WriteLog('TInstallation object freed successfully');
+    end;
+   end;
+    WriteLog('StoreLatestVersion - End');
+end;
+
+function TMain.GetLatestVersion(): string;
+var
+  Installation: TInstallation;
+begin
+  Result := '';
+
+  WriteLog('GetLatestVersion - Start');
+
+  if selectedProduct <> '' then
+   WriteLog('Product Name : ' + selectedProduct);
+
+  if selectedCR <> '' then
+   WriteLog('ChangeRequest Name : ' + selectedCR);
+  
+
+  Installation := nil;
+ try
+  try
+    WriteLog('Creating TInstallation object');
+
+    Installation := TInstallation.Create;
+
+    WriteLog('TInstallation object created successfully');
+
+    if selectedProduct<>'' then
+      Result := Installation.GetStoredVersionFromDB(selectedProduct);
+
+    if selectedCR<>'' then
+       Result := Installation.GetStoredVersionFromDB(selectedCR);
+
+
+    WriteLog('Stored version returned : ' + Result);
+    WriteLog('GetLatestVersion - Completed');
+
+  except
+    on E: Exception do
+    begin
+      WriteLog('GetLatestVersion - FAILED');
+      if selectedProduct<> '' then
+        WriteLog('Product Name : ' + selectedProduct);
+
+      if selectedCR <> '' then
+        WriteLog('ChangeRequest Name : ' + selectedCR);
+
+      WriteLog('Exception Class : ' + E.ClassName);
+      WriteLog('Error : ' + E.Message);
+
+      raise;
+    end;
+  end;
+  finally
+    if Assigned(Installation) then
+    begin
+      WriteLog('Freeing TInstallation object');
+
+      Installation.Free;
+
+      WriteLog('TInstallation object freed successfully');
+    end;
+
+    WriteLog('GetLatestVersion - End');
+  end;
+end;
+
+function TMain.GetAndStoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string;
+  IsGet: Boolean): string;
+begin
+  WriteLog('GetAndStoreLatestVersion Is started.....');
+  WriteLog('Version Given : ' + ProductOrCRVersion +' IsGetVERSION : ' + BoolToStr(IsGet, True));
+  Result := '';
+
+  if IsGet then
+  begin
+    Result := GetLatestVersion();
+  end
+  else
+  begin
+        StoreLatestVersion(ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg);
+  end;
+
+end;
+
+function TMain.CompareProductVersion(const RequestedVersion,
+  InstalledVersion: string): Integer;
+var
+  RequestedNumber: Extended;
+  InstalledNumber: Extended;
+  Version: string;
+  InstalledStr: string;
+  Code: Integer;
+begin
+  Version := StringReplace(
+    RequestedVersion,
+    'version',
+    '',
+    [rfReplaceAll, rfIgnoreCase]
+  );
+
+  InstalledStr := StringReplace(
+    InstalledVersion,
+    'version',
+    '',
+    [rfReplaceAll, rfIgnoreCase]
+  );
+
+  Version := Trim(Version);
+  InstalledStr := Trim(InstalledStr);
+
+  Val(Version, RequestedNumber, Code);
+
+  if Code <> 0 then
+    raise Exception.Create(
+      'Invalid requested version: ' + RequestedVersion);
+
+  Val(InstalledStr, InstalledNumber, Code);
+
+  if Code <> 0 then
+    raise Exception.Create(
+      'Invalid installed version: ' + InstalledVersion);
+
+  if RequestedNumber > InstalledNumber then
+    Result := 1
+  else if RequestedNumber < InstalledNumber then
+    Result := -1
+  else
+    Result := 0;
+end;
 
 end.

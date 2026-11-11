@@ -21,13 +21,13 @@ procedure InitializeInstallUpdatesToRedis(
   const AArmBaseUrl: string;
   const AProjectName: string;
   const AUserName: string;
-  const APackageName: string
+  const AProductName: string
 );
 
 procedure SetInstallUpdateContext(
   const AProjectName: string;
   const AUserName: string;
-  const APackageName: string
+  const AProductName: string
 );
 
 procedure SetArmBaseUrl(const ABaseUrl: string);
@@ -59,7 +59,7 @@ var
 
   GProjectName: string = '';
   GUserName: string = '';
-  GPackageName: string = '';
+  GProductName: string = '';
 
 
 procedure LogMessage(const AMessage: string);
@@ -187,18 +187,18 @@ end;
 procedure SetInstallUpdateContext(
   const AProjectName: string;
   const AUserName: string;
-  const APackageName: string
+  const AProductName: string
 );
 begin
   GProjectName := Trim(AProjectName);
   GUserName := Trim(AUserName);
-  GPackageName := Trim(APackageName);
+  GProductName := Trim(AProductName);
 
   LogMessage(
     'Install update context configured. ' +
     'Project=' + GProjectName +
     ', User=' + GUserName +
-    ', Package=' + GPackageName
+    ', Product=' + GProductName
   );
 end;
 
@@ -617,7 +617,7 @@ begin
 
       {
         Default key:
-          appname_username_packagename
+          appname_username_Productname
       }
       if EffectiveRedisKey = '' then
       begin
@@ -627,16 +627,16 @@ begin
             'Cannot prepare default Redis key.'
           );
 
-        if GPackageName = '' then
+        if GProductName = '' then
           raise Exception.Create(
-            'Package name is empty. ' +
+            'Product name is empty. ' +
             'Cannot prepare default Redis key.'
           );
 
         EffectiveRedisKey :=
           EffectiveAppName + '_' +
           GUserName + '_' +
-          ReplaceSpacesWithUnderscore(GPackageName);
+          ReplaceSpacesWithUnderscore(GProductName);
       end;
 
       if Trim(ARedisValue) = '' then
@@ -659,9 +659,9 @@ begin
 
         RequestJson := BuildRedisWriteRequestJson(EffectiveAppName,
           EffectiveRedisKey + '_' + 'FAILED', LogFileName);
-        // set logfilename in the key "appname_username_pkgname_FAILED" when package failed
+        // set logfilename in the key "appname_username_pkgname_FAILED" when Product failed
 
-        LogMessage('Preparing Redis write with logfilename for FAILED package. '
+        LogMessage('Preparing Redis write with logfilename for FAILED Product. '
           + 'AccessCode=' + EffectiveAppName + ', RedisKey=' + EffectiveRedisKey
           + '_' + 'FAILED' + ', ValueLength=' + IntToStr(Length(LogFileName)) +
           ', ExpiryMins=' + REDIS_KEY_EXPIRY_MINUTES);
@@ -671,7 +671,7 @@ begin
         ValidateRedisWriteResponse(ApiResponse);
 
         LogMessage
-          ('FAILED package logfile update pushed to Redis successfully. ' +
+          ('FAILED Product logfile update pushed to Redis successfully. ' +
           'RedisKey =' + EffectiveRedisKey + '; RedisKeyValue =' + LogFileName);
       end;
       Sleep(1000); // delay
@@ -738,7 +738,7 @@ procedure InitializeInstallUpdatesToRedis(
   const AArmBaseUrl: string;
   const AProjectName: string;
   const AUserName: string;
-  const APackageName: string
+  const AProductName: string
 );
 begin
   if not Assigned(GHttpClientLock) then
@@ -761,7 +761,7 @@ begin
   SetInstallUpdateContext(
     AProjectName,
     AUserName,
-    APackageName
+    AProductName
   );
 
   // Create once and reuse for all Redis API calls.
@@ -795,7 +795,7 @@ begin
 
   GProjectName := '';
   GUserName := '';
-  GPackageName := '';
+  GProductName := '';
   Arm_Baseurl := '';
 
   LogMessage(

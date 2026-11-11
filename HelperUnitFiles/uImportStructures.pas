@@ -240,8 +240,8 @@ begin
 
     // TODO:
     // AES-256 CBC PKCS7 Decryption
-    // Key : AxiDataPackageAxpertExportImport
-    // IV  : AxiDataPackages1
+    // Key : AxiDataProductAxpertExportImport
+    // IV  : AxiDataProducts1
 
     Result := CipherText; // Temporary
 
@@ -294,7 +294,7 @@ begin
         FileContent.LoadFromFile(FileName);
         Result := FileContent.Text;
 
-        // Decrypt Data Package (.axidata) files
+        // Decrypt Data Product (.axidata) files
         if SameText(ExtractFileExt(FileName), '.axidata') then
         begin
           writelog('Decrypting axidata file : ' + ExtractFileName(FileName));
@@ -1378,7 +1378,7 @@ begin
   Result := StringReplace(Result,'#dq#','\"',[rfReplaceAll]);
 end;
 
-function BuildAxPutRequest(
+(*function BuildAxPutRequest(
   const AxDataJson: string;
   const ARMSessionId: string;
   var bCanContinue: Boolean ): string;
@@ -1395,7 +1395,7 @@ begin
   writelog('BuildAxPutRequest function started...');
 
   try
-    writelog('Parsing AxiData package JSON.');
+    writelog('Parsing AxiData Product JSON.');
 
     AxPutJsonRequest := NormalizeJsonString(AxDataJson);
     // Need to check this   | handling \" and \
@@ -1408,7 +1408,7 @@ begin
     RootObj := TJSONObject.ParseJSONValue(AxPutJsonRequest) as TJSONObject;
 
     if RootObj = nil then
-      raise Exception.Create('Invalid AxiData package JSON.');
+      raise Exception.Create('Invalid AxiData Product JSON.');
 
     writelog('AxiData JSON parsed successfully.');
 
@@ -1459,6 +1459,195 @@ begin
     end;
   end;
   writelog('BuildAxPutRequest function completed.');
+end; *)
+
+function BuildAxPutPayload(
+  const AxDataJson: string;
+  var RootObj: TJSONObject;
+  var bCanContinue: Boolean): TJSONObject;
+var
+  ResultPayloadObj: TJSONObject;
+  AxPutPayloadObj: TJSONObject;
+  NormalizedJson: string;
+  StartTime: Cardinal;
+begin
+  Result := nil;
+  RootObj := nil;
+  bCanContinue := False;
+
+  StartTime := GetTickCount;
+
+  writelog(
+    'BuildAxPutPayload started. Input size: ' +
+    IntToStr(Length(AxDataJson)) +
+    ' bytes.'
+  );
+
+  try
+    {------------------------------------------------------}
+    { First try to parse the original JSON directly.       }
+    { Do NOT normalize valid JSON.                          }
+    {------------------------------------------------------}
+
+    writelog('Trying to parse original JSON directly.');
+
+    RootObj :=
+      TJSONObject.ParseJSONValue(
+        AxDataJson
+      ) as TJSONObject;
+
+    {------------------------------------------------------}
+    { Only use existing normalization if direct parsing     }
+    { fails. This avoids modifying valid escape sequences.  }
+    {------------------------------------------------------}
+
+    if RootObj = nil then
+    begin
+      writelog(
+        'Direct JSON parsing failed. Trying NormalizeJsonString.'
+      );
+
+      NormalizedJson :=
+        NormalizeJsonString(AxDataJson);
+
+      writelog(
+        'Normalized JSON size: ' +
+        IntToStr(Length(NormalizedJson)) +
+        ' bytes.'
+      );
+
+      RootObj :=
+        TJSONObject.ParseJSONValue(
+          NormalizedJson
+        ) as TJSONObject;
+    end;
+
+    if RootObj = nil then
+      raise Exception.Create(
+        'Invalid AxiData Product JSON.'
+      );
+
+    writelog(
+      'AxiData JSON parsed successfully. Time: ' +
+      IntToStr(GetTickCount - StartTime) +
+      ' ms.'
+    );
+
+    {------------------------------------------------------}
+    { resultpayload                                          }
+    {------------------------------------------------------}
+
+    if RootObj.Get('resultpayload') = nil then
+      raise Exception.Create(
+        '"resultpayload" node not found.'
+      );
+
+    ResultPayloadObj :=
+      RootObj.Get('resultpayload').JsonValue
+        as TJSONObject;
+
+    if ResultPayloadObj = nil then
+      raise Exception.Create(
+        '"resultpayload" is not a JSON object.'
+      );
+
+    {------------------------------------------------------}
+    { axputpayloads                                          }
+    {------------------------------------------------------}
+
+    if ResultPayloadObj.Get('axputpayloads') = nil then
+      raise Exception.Create(
+        '"axputpayloads" node not found.'
+      );
+
+    AxPutPayloadObj :=
+      ResultPayloadObj.Get('axputpayloads').JsonValue
+        as TJSONObject;
+
+    if AxPutPayloadObj = nil then
+      raise Exception.Create(
+        '"axputpayloads" is not a JSON object.'
+      );
+
+    {------------------------------------------------------}
+    { Remove skipped master objects                         }
+    {------------------------------------------------------}
+
+    StartTime := GetTickCount;
+
+    AxPutPayloadObj :=
+      RemoveSkippedMasterObjects(
+        AxPutPayloadObj
+      );
+
+    writelog(
+      'RemoveSkippedMasterObjects completed. Time: ' +
+      IntToStr(GetTickCount - StartTime) +
+      ' ms.'
+    );
+
+    {------------------------------------------------------}
+    { Validate                                              }
+    {------------------------------------------------------}
+
+    StartTime := GetTickCount;
+
+    if not hasValidAxPutRequest(
+      AxPutPayloadObj
+    ) then
+    begin
+      writelog(
+        'Not a valid AxPutRequest payload.'
+      );
+
+      { RootObj must not remain allocated on failure. }
+      RootObj.Free;
+      RootObj := nil;
+
+      Exit;
+    end;
+
+    writelog(
+      'AxPut validation completed. Time: ' +
+      IntToStr(GetTickCount - StartTime) +
+      ' ms.'
+    );
+
+    {------------------------------------------------------}
+    { IMPORTANT: Do NOT call ToString here.                 }
+    { Keep the TJSONObject alive.                            }
+    {------------------------------------------------------}
+
+    Result := AxPutPayloadObj;
+    bCanContinue := True;
+
+    writelog(
+      'AxPut payload prepared successfully. Total time: ' +
+      IntToStr(GetTickCount - StartTime) +
+      ' ms.'
+    );
+
+  except
+    on E: Exception do
+    begin
+      if Assigned(RootObj) then
+      begin
+        RootObj.Free;
+        RootObj := nil;
+      end;
+
+      writelog(
+        'BuildAxPutPayload failed.'
+      );
+
+      writelog(
+        'Reason: ' +
+        E.Message
+      );
+
+      raise;
+    end;
+  end;
 end;
 
 procedure DoAxPut(
@@ -1546,7 +1735,268 @@ begin
   writelog('DoAxPut function ends...');
 end;
 
-function TImportStructures.InstallDataJson(ADataJsonFile: string): Boolean;
+function TImportStructures.InstallDataJson(
+  ADataJsonFile: string): Boolean;
+var
+  AxDataJson: string;
+  AxPutRequest: string;
+
+  ARMSessionId: string;
+  Token: string;
+
+  FileName: string;
+  bCanContinue: Boolean;
+
+  RootObj: TJSONObject;
+  AxPutPayloadObj: TJSONObject;
+
+  StartTime: Cardinal;
+begin
+  Result := False;
+
+  RootObj := nil;
+  AxPutPayloadObj := nil;
+
+  writelog(
+    'InstallDataJson function started.'
+  );
+
+  StartTime := GetTickCount;
+  try
+  try
+    {------------------------------------------------------}
+    { File information                                      }
+    {------------------------------------------------------}
+
+    FileName :=
+      ExtractFileName(ADataJsonFile);
+
+    writelog(
+      'Processing AxiData Product: ' +
+      FileName
+    );
+
+    Console_write(
+      '   - Processing AxiData Json File ' +
+      FileName +
+      '.',
+      10
+    );
+
+    Appwriteln;
+
+    {------------------------------------------------------}
+    { Read JSON file                                        }
+    {------------------------------------------------------}
+
+    writelog(
+      'Reading AxiData Product.'
+    );
+
+    AxDataJson :=
+      ReadFile(ADataJsonFile);
+
+    writelog(
+      'AxiData Product loaded successfully. Size: ' +
+      IntToStr(Length(AxDataJson)) +
+      ' bytes.'
+    );
+
+    {------------------------------------------------------}
+    { Validate URLs                                         }
+    {------------------------------------------------------}
+
+    if ArmSignInUrl = '' then
+      raise Exception.Create(
+        'ARM SignIn Url is Empty'
+      );
+
+    if ArmAxPutUrl = '' then
+      raise Exception.Create(
+        'ARM AxPut Url is Empty'
+      );
+
+    {------------------------------------------------------}
+    { Build AxPut JSON OBJECT                               }
+    {                                                      }
+    { IMPORTANT:                                             }
+    { BuildAxPutPayload parses only once and keeps the      }
+    { TJSONObject alive.                                    }
+    {------------------------------------------------------}
+
+    bCanContinue := False;
+
+    AxPutPayloadObj :=
+      BuildAxPutPayload(
+        AxDataJson,
+        RootObj,
+        bCanContinue
+      );
+
+    if not bCanContinue then
+    begin
+      writelog(
+        'AxPut payload validation failed.'
+      );
+
+      Exit;
+    end;
+
+    writelog(
+      'AxPut payload build completed successfully.'
+    );
+
+    {------------------------------------------------------}
+    { SignIn                                                }
+    {------------------------------------------------------}
+
+    writelog(
+      'AxPut payload internal verification successful.'
+    );
+
+    writelog(
+      'Proceeding with SignIn.'
+    );
+
+    writelog(
+      'Authenticating with ARM.'
+    );
+
+    DoSignIn(
+      ArmSignInUrl,
+      ARMSessionId,
+      Token
+    );
+
+    writelog(
+      'Authentication completed successfully.'
+    );
+
+    {------------------------------------------------------}
+    { Add ARMSessionId directly to existing JSON object     }
+    {                                                      }
+    { NO ParseJSONValue                                     }
+    { NO NormalizeJsonString                                }
+    { NO intermediate ToString                              }
+    {------------------------------------------------------}
+
+    if AxPutPayloadObj.Get('ARMSessionId') <> nil then
+    begin
+      AxPutPayloadObj.RemovePair(
+        'ARMSessionId'
+      );
+    end;
+
+    AxPutPayloadObj.AddPair(
+      'ARMSessionId',
+      ARMSessionId
+    );
+
+    writelog(
+      'ARMSessionId added to AxPut payload.'
+    );
+
+    {------------------------------------------------------}
+    { Serialize ONCE                                       }
+    {                                                      }
+    { TJSONObject.ToString performs the required JSON       }
+    { escaping. Do NOT call NormalizeJsonString afterwards. }
+    {------------------------------------------------------}
+
+    StartTime := GetTickCount;
+
+    AxPutRequest :=
+      AxPutPayloadObj.ToString;
+
+    writelog(
+      'AxPut JSON serialization completed. Size: ' +
+      IntToStr(Length(AxPutRequest)) +
+      ' bytes. Time: ' +
+      IntToStr(GetTickCount - StartTime) +
+      ' ms.'
+    );
+
+    {------------------------------------------------------}
+    { Submit AxPut                                         }
+    {------------------------------------------------------}
+
+    writelog(
+      'Submitting Product to AxPut API.'
+    );
+
+    DoAxPut(
+      ArmAxPutUrl,
+      AxPutRequest,
+      ARMSessionId,
+      Token
+    );
+
+    writelog(
+      'Product imported successfully.'
+    );
+
+    Result := True;
+
+    Console_write(
+      '   - AxiData Json File ' +
+      FileName +
+      ' imported successfully.',
+      10
+    );
+
+    AppWriteln;
+
+  except
+    on E: Exception do
+    begin
+      Result := False;
+
+      InstallErrMsg :=
+        ' InstallDataJson failed ' +
+        E.Message;
+
+      writelog(
+        'InstallDataJson failed.'
+      );
+
+      writelog(
+        'Error: ' +
+        E.Message
+      );
+
+      ReadErrorList(
+        E.Message
+      );
+
+      Console_write(
+        'Error: ' +
+        E.Message,
+        12
+      );
+
+      Appwriteln;
+
+      raise;
+    end;
+  end;
+  finally
+    {------------------------------------------------------}
+    { IMPORTANT: AxPutPayloadObj belongs to RootObj.         }
+    { Free only RootObj.                                    }
+    {------------------------------------------------------}
+
+    if Assigned(RootObj) then
+      RootObj.Free;
+
+    writelog(
+      'InstallDataJson function ends. Total time: ' +
+      IntToStr(GetTickCount - StartTime) +
+      ' ms.'
+    );
+  end;
+end;
+
+(*function TImportStructures.InstallDataJson(ADataJsonFile: string): Boolean;
 var
   AxPutRequest: string;
   // SignInURL: string;
@@ -1561,13 +2011,13 @@ begin
   writelog('InstallDataJson function started.');
   try
     FileName := ExtractFileName(ADataJsonFile);
-    writelog('Processing AxiData Package : ' + FileName);
+    writelog('Processing AxiData Product : ' + FileName);
     Console_write('   - Processing AxiData Json File ' + FileName + '.', 10);
     Appwriteln;
 
-    writelog('Reading AxiData package.');
+    writelog('Reading AxiData Product.');
     AxPutRequest := ReadFile(ADataJsonFile);
-    writelog('AxiData package loaded successfully.');
+    writelog('AxiData Product loaded successfully.');
 
     // hardcoded for now, need to enhance to be read from appsettings
     // SignInURL := 'https://agileqa.agilecloud.biz/armnew/api/v1/Signin';
@@ -1612,9 +2062,9 @@ begin
         AxPutPayloadObj.Free;
       end;
 
-      writelog('Submitting package to AxPut API.');
+      writelog('Submitting Product to AxPut API.');
       DoAxPut(ArmAxPutUrl, AxPutRequest, ARMSessionId, Token);
-      writelog('Package imported successfully.');
+      writelog('Product imported successfully.');
       Result := True;
 
       Console_write('   - AxiData Json File ' + FileName +' imported successfully.', 10);
@@ -1638,6 +2088,6 @@ begin
     end;
   end;
   writelog('InstallDataJson function ends...');
-end;
+end; *)
 
 end.

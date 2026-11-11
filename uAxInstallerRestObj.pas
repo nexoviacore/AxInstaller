@@ -213,6 +213,7 @@ begin
   ACommand := GetJSONString(AJSONObj, 'command');
   ATrace   := GetJSONString(AJSONObj, 'trace');
   AxIns_Username := GetJSONString(AJSONObj, 'username');
+  AxIns_ProductID := GetJSONString(AJSONObj, 'productid');
 
   bTrace := SameText(Trim(ATrace), 'true') or
           SameText(Trim(ATrace), '1') or
@@ -227,6 +228,12 @@ begin
     if Trim(AxIns_Username) = '' then
   begin
     Result.Msg := 'Username cannot be empty.';
+    Exit;
+  end;
+
+  if Trim(AxIns_ProductID) = '' then
+   begin
+    Result.Msg := 'Product_id cannot be empty.';
     Exit;
   end;
 

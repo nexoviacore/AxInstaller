@@ -11,7 +11,7 @@ uses
 var
   userresp: string;
   gitm: TGitManager;
-  projectname, tempDBConnectionName, MultiProjConnNames, AxIns_Username : string;
+  projectname, tempDBConnectionName, MultiProjConnNames, AxIns_Username,AxIns_ProductID : string;
   scriptpath, AppDir: string;
   Access_Token: string;
   Owner: string;
@@ -20,7 +20,7 @@ var
   patchOrPlugin: string;
   slUserInstructions: TStringlist;
   gitpluginurl, GitPatchURL : string;
-  PluginArray, VersionArray, projectarray, PackageArray : Array of String;
+  PluginArray, VersionArray, projectarray, ProductArray : Array of String;
   gitusername, gitpassword, webcodepath, rmqclientpath, pluginpath: string;
   patchversion, activeconnection: string;
   runwebcodepath, devwebcodepath, runscriptpath, devscriptpath,
@@ -33,7 +33,9 @@ var
   selectedPlugin, selectedversion, selectedpatch, selectedSchema: string;
   pluginLocalPath, patchLocalPath, patchtobeinstall, currentpatchname,
     currentversionname: string;
-  gitpackageurl, packageLocalPath, selectedPackage: string;
+  gitProducturl, ProductLocalPath, selectedProduct,requestedVersion,VersionTakenFromVersionInfo,
+  installtype,selectedCR,gitChangeRequesturl,ChangeRequestLocalPath,TempGitAcc,TempGitRepo:string;
+  IsVersionInstall: boolean = False;
   armsigninurl, armaxputurl, armbaseurl: string;
   curdir, logCreation, adminpwd: string;
   continuousinstallation: boolean;
@@ -63,14 +65,15 @@ var
   IsConfigReload: boolean;
   SkipFileList: TStringlist;
   Installer_ErrList: TStringlist;
-  HasDefSchema, IsPackageInstall, bGitPullIncomplete : boolean;
+  HasDefSchema, IsProductInstall,IsCRInstall, bGitPullIncomplete : boolean;
 
   //PayloadCommand: String;
 
   gResponse,InstallErrMsg,LogFileName : string;
 
 const
-  cPackages = 'AxpertPackages';
+  cProducts = 'AxpertProducts';
+  cChangeRequests = 'AxpertChangeRequests';
   // plugin structure
   cPlugins = 'AxpertPlugins';
   cPatches = 'AxpertPatches';
@@ -87,8 +90,10 @@ const
   cPluginScript = 'PluginScripts';
   cPluginAPI = 'AxPlugins';
   cCustomPages = 'CustomPages';
-  cPackageAPI = 'AxPackages';
-  cPackageScript = 'PackageScripts';
+  cProductAPI = 'AxProducts';
+  cProductScript = 'ProductScripts';
+  cChangeRequestAPI = 'AxChangeRequests';
+  cChangeRequestScript = 'ChangeRequestScripts';
 
 procedure Console_Write(const sMessage: string = ''; iColor: Integer = 15);
 procedure Console_Writeln(const sMessage: string = ''; iColor: Integer = 15);
@@ -670,14 +675,23 @@ begin
     '"message":"' + StringReplace(InstallErrMsg, '"', '\"', [rfReplaceAll]) + '"' +
     '}';
   {$IFNDEF CONSOLE_APP}
-    if IsPackageInstall then
+    if IsProductInstall then
 //      PushInstallUpdateToRedis('','','Installation Failed. '+InstallErrMsg);
        PushInstallUpdateToRedis('','','FAILED');
   {$ENDIF};
 end
 else
 begin
-  sMessage := 'Command Executed Successfully';
+   sMessage := 'Command Executed Successfully';
+//   if IsProductInstall or IsCRInstall then
+//    begin
+//    sMessage := 'Command Executed Successfully';
+//    end
+//    else
+//    begin
+//      sMessage := 'Command Executed Successfully' + sLineBreak +
+//                  AResponseList.Text;
+//    end;
 
   gResponse :=
     '{' +
@@ -686,12 +700,16 @@ begin
     '"message":"' + StringReplace(sMessage, '"', '\"', [rfReplaceAll]) + '"' +
     '}';
   {$IFNDEF CONSOLE_APP}
-   if IsPackageInstall then
+   if IsProductInstall then
+     PushInstallUpdateToRedis('','','INSTALLED');
+   if IsCRInstall then
      PushInstallUpdateToRedis('','','INSTALLED');
   {$ENDIF};
 end;
 {$IFNDEF CONSOLE_APP}
-   if patchOrPlugin = 'Package' then
+   if patchOrPlugin = 'Product' then
+     FinalizeInstallUpdatesToRedis;
+   if patchOrPlugin = 'ChangeRequest' then
      FinalizeInstallUpdatesToRedis;
 {$ENDIF};
 end;

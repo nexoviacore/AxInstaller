@@ -1819,23 +1819,43 @@ begin
 
       WriteLog('XDS Buffered mode enabled');
 
-      if selectedProduct <> '' then
-       pkgXDS.CDS.CommandText :=
-        'SELECT product_version ' +
-        'FROM axi_installed_products ' +
-        'WHERE product_name = :product_name ' +
-        'AND installation_status = ''Installed'' ' +
-        'ORDER BY installed_on DESC ' +
-        'LIMIT 1';
+//      if selectedProduct <> '' then
+//       pkgXDS.CDS.CommandText :=
+//        'SELECT product_version ' +
+//        'FROM axi_installed_products ' +
+//        'WHERE product_name = :product_name ' +
+//        'AND installation_status = ''Installed'' ' +
+//        'ORDER BY installed_on DESC ' +
+//        'LIMIT 1';
+//
+//     if selectedCR <> '' then
+//       pkgXDS.CDS.CommandText :=
+//        'SELECT product_version ' +
+//        'FROM axi_installed_products ' +
+//        'WHERE product_name = :product_name ' +
+//        'AND installation_status = ''Installed'' ' +
+//        'ORDER BY installed_on DESC ' +
+//        'LIMIT 1';
 
-     if selectedCR <> '' then
-       pkgXDS.CDS.CommandText :=
-        'SELECT product_version ' +
-        'FROM axi_installed_products ' +
-        'WHERE product_name = :product_name ' +
-        'AND installation_status = ''Installed'' ' +
-        'ORDER BY installed_on DESC ' +
-        'LIMIT 1';
+       if selectedProduct <> '' then
+        pkgXDS.CDS.CommandText :=
+          'SELECT product_version ' +
+          'FROM axi_installed_products ' +
+          'WHERE product_name = :product_name ' +
+          'AND LOWER(product_type) = ''product'' ' +
+          'AND installation_status = ''Installed'' ' +
+          'ORDER BY installed_on DESC ' +
+          'LIMIT 1';
+
+      if selectedCR <> '' then
+        pkgXDS.CDS.CommandText :=
+          'SELECT product_version ' +
+          'FROM axi_installed_products ' +
+          'WHERE product_name = :product_name ' +
+          'AND LOWER(product_type) = ''changerequest'' ' +
+          'AND installation_status = ''Installed'' ' +
+          'ORDER BY installed_on DESC ' +
+          'LIMIT 1';
 
       WriteLog('Latest version query prepared');
 
@@ -1945,7 +1965,7 @@ begin
       WriteLog('Submitting product_version : ' + ProductOrCRVersion);
       pkgXDS.Submit('product_version', ProductOrCRVersion, 'c');
 
-      WriteLog('Submitting product_type default value Product');
+      WriteLog('Submitting product_type : ' +installtype);
       pkgXDS.Submit('product_type',installtype, 'c');
 
       WriteLog('Submitting repository_name');

@@ -121,22 +121,22 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <Manifest_File>None</Manifest_File>
         <DCC_Define>AXINSTALLER_REST_MODE;ForService;ForAxInstaller;withsmtp;NotForRestDLL;DEBUG;$(DCC_Define)</DCC_Define>
-        <DCC_DcuOutput>D:\AxInsGIT-Output\Release\REST DLL\32Bit\dcus</DCC_DcuOutput>
-        <DCC_ExeOutput>D:\AxInsGIT-Output\Release\REST DLL\32Bit</DCC_ExeOutput>
-        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (32 Bit) (IR16092026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=32Bit (IR16092026);ProgramID=com.embarcadero.$(ModuleName)</VerInfo_Keys>
+        <DCC_DcuOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\32Bit\dcus</DCC_DcuOutput>
+        <DCC_ExeOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\32Bit</DCC_ExeOutput>
+        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (32 Bit) (IR11112026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=32Bit (IR11112026);ProgramID=com.embarcadero.$(ModuleName)</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <VerInfo_MajorVer>11</VerInfo_MajorVer>
         <VerInfo_MinorVer>4</VerInfo_MinorVer>
         <DCC_DebugInformation>false</DCC_DebugInformation>
-        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (64 Bit) (IR07102026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=64Bit (IR07102026);ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (64 Bit) (IR19112026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=64Bit (IR19112026);ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
         <DCC_Define>AXINSTALLER_REST_MODE;ForService;ForAxInstaller;withsmtp;NotForRestDLL;DEBUG;$(DCC_Define)</DCC_Define>
-        <DCC_ExeOutput>D:\AxInsGIT-Output\Release\REST DLL\64Bit</DCC_ExeOutput>
+        <DCC_ExeOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\64Bit</DCC_ExeOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <Manifest_File>None</Manifest_File>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UnitSearchPath>D:\Supporting Files\__Supporting Files\PNGComponents-master\Source;D:\Supporting Files\__Supporting Files\PowerPDFXe3;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\System;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Protocols;D:\Supporting Files\__Supporting Files\Indy-master\Indy-master\Lib\Core;C:\Program Files (x86)\Devart\dbExpress\PostgreSql\Lib\Delphi17\Win64;D:\Supporting Files\__Supporting Files\FastReport VCL Enterprise 2022_2_11\LibD17x64;C:\Program Files (x86)\Devart\Dbx\MySql\Lib\Delphi17\Win64;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-        <DCC_DcuOutput>D:\AxInsGIT-Output\Release\REST DLL\64Bit\dcus</DCC_DcuOutput>
+        <DCC_DcuOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\64Bit\dcus</DCC_DcuOutput>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
@@ -266,6 +266,9 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <DCCReference Include="ChangedUnits\uCreateStructure.pas">
             <Form>------------------------------------------------------------------</Form>
         </DCCReference>
+        <DCCReference Include="UnitChangedRelatedToIO\uRedisConnection.pas">
+            <Form>------------------------------------------------------------------</Form>
+        </DCCReference>
         <None Include="C:\Users\Tamilarasan.m\Documents\RAD Studio\Projects\Project1\js\base64.js"/>
         <None Include="C:\Users\Tamilarasan.m\Documents\RAD Studio\Projects\Project1\js\ServerFunctionExecutor.js"/>
         <None Include="C:\Users\Tamilarasan.m\Documents\RAD Studio\Projects\Project1\js\json2.js"/>
@@ -383,13 +386,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPad_Launch2048">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -429,24 +432,24 @@ $(PostBuildEvent)]]></PostBuildEvent>
                 </DeployClass>
                 <DeployClass Name="ProjectOSXEntitlements"/>
                 <DeployClass Name="ProjectiOSResource">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPhone_Launch640">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -469,13 +472,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPhone_Launch320">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -549,13 +552,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSInfoPList"/>
                 <DeployClass Name="iPad_Launch1024">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -579,13 +582,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSDeviceResourceRules"/>
                 <DeployClass Name="iPad_Launch768">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -626,13 +629,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPhone_Launch640x1136">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -669,13 +672,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPad_Launch1536">
-                    <Platform Name="iOSDevice32">
-                        <Operation>1</Operation>
-                    </Platform>
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
@@ -704,14 +707,14 @@ $(PostBuildEvent)]]></PostBuildEvent>
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Android" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
             </Deployment>
             <Platforms>
                 <Platform value="Win32">True</Platform>

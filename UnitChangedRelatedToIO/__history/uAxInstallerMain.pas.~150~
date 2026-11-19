@@ -104,8 +104,8 @@ type
     function ReloadConfig(): string;
 
     function GetLatestVersion(): string;
-    procedure StoreLatestVersion(const ProductVersion,ResultOfInstallation,ResultOfInstallMsg: string);
-    function GetAndStoreLatestVersion(const ProductVersion,ResultOfInstallation,ResultOfInstallMsg: string;
+    procedure StoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+    function GetAndStoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string;
       IsGet: Boolean): string;
     function CompareProductVersion(const RequestedVersion,
       InstalledVersion: string): Integer;
@@ -316,6 +316,7 @@ begin
   MultiProjConnNames := '';
   bConnectTempDB := False;
   IsProductInstall := False;
+  IsCRInstall := False;
   bGitPullIncomplete := False; // Pull completed successfully
   // AppDir := IncludeTrailingBackslash(GetCurrentDir);
 
@@ -447,6 +448,7 @@ begin
   pluginLocalPath := AppDir + cPlugins + '\';
   patchLocalPath := AppDir + cReleases + '\';
   ProductLocalPath := AppDir + cProducts + '\';
+  ChangeRequestLocalPath := AppDir + cChangeRequests + '\';
 
   // uConfig - SetPatchLocalPath - patchLocalPath value updated
   ForceDirectories(pluginLocalPath);
@@ -800,6 +802,7 @@ begin
       commandWord := Command;
       slUserInstructions.clear;
       IsProductInstall := False;
+      IsCRInstall := False;
       bGitPullIncomplete := False; // Pull completed successfully
       writelog('');
       writelog('Executing Command : ' +Command);
@@ -3610,6 +3613,12 @@ begin
               if commandstrlist.Count >= 4 then
               begin
                 RequestedVersion := Trim(commandstrlist[3]);
+                if LowerCase(RequestedVersion) = 'latest' then
+                begin
+                  WriteLog('Latest version requested. Skipping version comparison.');
+                end
+                else
+                begin
                 IsVersionInstall := True;
 
                 WriteLog('Given version to install: ' + RequestedVersion);
@@ -3629,6 +3638,7 @@ begin
                       );
                    end;
                 end;
+               end;
               end;
 
               if not IsVersionInstall then
@@ -3682,6 +3692,134 @@ begin
               end;
             end;
           end;
+
+          ///change request
+          ///
+          if (commandstrlist.Count >= 3) and
+            (lowercase(commandstrlist[1]) = 'changerequest') then
+          begin
+            try
+              IsCRInstall := True;
+              selectedCR := Trim(commandstrlist[2]);
+{$IFNDEF CONSOLE_APP}
+              if IsCRInstall then
+              begin
+                InitializeInstallUpdatesToRedis(ArmBaseUrl, activeconnection,
+                  AxIns_Username, selectedCR);
+                PushInstallUpdateToRedis('', '', 'PREPARING');
+              end;
+{$ENDIF};
+
+
+              if selectedCR = '' then
+              begin
+                writeln;
+                Console_write('ChangeRequest name is missing.', 12);
+                appwriteln;
+{$IFDEF CONSOLE_APP}
+                Command := instBeforeReadCommand;
+                parseCommand(Command);
+{$ELSE}
+                // RestImp
+{$ENDIF};
+                Exit;
+              end;
+
+
+              ///
+              // Version related changes
+              IsVersionInstall := False;
+              RequestedVersion := 'Latest';
+              if not assigned(database) then
+                  database := TDbConnect.Create;
+
+              database.DatabaseConnection();
+
+              if commandstrlist.Count >= 4 then
+              begin
+                RequestedVersion := Trim(commandstrlist[3]);
+                if LowerCase(RequestedVersion) = 'latest' then
+                begin
+                  WriteLog('Latest version requested. Skipping version comparison.');
+                end
+                else
+                begin
+                IsVersionInstall := True;
+
+                WriteLog('Given version to install: ' + RequestedVersion);
+
+                if IsVersionInstall then
+                begin
+                  AlreadyInstalledVersion := GetAndStoreLatestVersion('','','',True);
+                  WriteLog('The previous installed version is :'+AlreadyInstalledVersion);
+                  if (AlreadyInstalledVersion <> '') and
+                  (CompareProductVersion(LowerCase(RequestedVersion),LowerCase(AlreadyInstalledVersion)) <= 0)then
+                  begin
+                      WriteLog('The previous installed version is higher or may be equal, so exiting here');
+
+                      raise Exception.Create(
+                        'Already Latest Version ' + AlreadyInstalledVersion +
+                        ' is installed. Try next versions.'
+                      );
+                   end;
+                end;
+               end;
+              end;
+
+              if not IsVersionInstall then
+                WriteLog('Version is not given so default version is getting installed: ' + RequestedVersion);
+
+              patchOrPlugin := 'ChangeRequest';
+              appwriteln;
+              Console_write('Installing ChangeRequest : ' + selectedCR, 14);
+              WriteLog('Installing Product : ' + selectedCR);
+              appwriteln;
+
+              HandleInstallationCommand(selectedCR);
+
+             if (VersionTakenFromVersionInfo <> '') and
+               (VersionTakenFromVersionInfo <> requestedVersion) then
+             begin
+                requestedVersion := VersionTakenFromVersionInfo;
+             end;
+
+             if InstallErrMsg <> '' then
+             begin
+               WriteLog('Installation has been Failed : '+InstallErrMsg);
+               GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Failed',InstallErrMsg,False);
+             end
+             else
+             begin
+                WriteLog('Installation has been completed successfully');
+                WriteLog('Installed Latest git version : '+requestedVersion);
+                GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Installed','Installed Successfully',False);
+             end;
+
+              patchOrPlugin := '';
+              Exit;
+            except
+              on E: Exception do
+              begin
+                InstallErrMsg := E.ClassName + ' : ' + E.Message;
+                Console_write('Error : ' + E.Message, 12);
+                WriteLog('ChangeRequest installation failed. Error : ' + E.Message);
+                WriteLog('Installation has been Failed : '+InstallErrMsg);
+
+                if (VersionTakenFromVersionInfo <> '') and
+                   (VersionTakenFromVersionInfo <> requestedVersion) then
+                 begin
+                    requestedVersion := VersionTakenFromVersionInfo;
+                 end;
+
+                GetAndStoreVar := GetAndStoreLatestVersion(requestedVersion,'Failed',InstallErrMsg,False);
+                patchOrPlugin := '';
+                Exit;
+              end;
+            end;
+          end;
+
+
+
           // if comparestr(lowercase(pluginarray[A]), lowercase(commandWord)) = 0
           // then
           plugname := '';
@@ -4566,11 +4704,11 @@ begin
 {$ELSE}
 {$ENDIF};
       end
-      else if Pos('Producturl', lowercase(Command)) <> 0 then
+      else if Pos('producturl', lowercase(Command)) <> 0 then
       begin
         appwriteln;
-        write('Write Product git url : ');
-        Appreadln(gitProducturl);
+        appwrite('Write Product git url : ');
+        Appreadln(gitproducturl);
 
         JSONText := cfg.Readconfigfile();
         JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
@@ -4578,15 +4716,15 @@ begin
         Confound := False;
 
         for Pair in JSONObject do
-          if lowercase(Pair.JSONString.Value) = 'gitProducturl' then
+          if lowercase(Pair.JSONString.Value) = 'gitproducturl' then
           begin
-            JSONObject.removepair('gitProducturl');
-            JSONObject.addpair('gitProducturl', gitProducturl);
+            JSONObject.removepair('gitproducturl');
+            JSONObject.addpair('gitproducturl', gitproducturl);
             Confound := True;
             Break;
           end;
         if not Confound then
-          JSONObject.addpair('gitProducturl', gitProducturl);
+          JSONObject.addpair('gitproducturl', gitproducturl);
 
         AssignFile(UserJsonFile, 'appsetting.config');
         Rewrite(UserJsonFile);
@@ -4601,8 +4739,54 @@ begin
         JSONObject.Free;
 
         appwriteln('Product git url updated successfully..!');
-        WriteLog('Product git url : ' + gitProducturl);
+        WriteLog('Product git url : ' + gitproducturl);
         WriteLog('Product git url updated successfully.');
+
+        ReloadConfig();
+
+{$IFDEF CONSOLE_APP}
+        Command := instBeforeReadCommand;
+        parseCommand(Command);
+{$ELSE}
+{$ENDIF};
+      end
+      else if Pos('changerequesturl', lowercase(Command)) <> 0 then
+      begin
+        appwriteln;
+        write('Write changerequesturl git url : ');
+        Appreadln(gitchangerequesturl);
+
+        JSONText := cfg.Readconfigfile();
+        JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+
+        Confound := False;
+
+        for Pair in JSONObject do
+          if lowercase(Pair.JSONString.Value) = 'gitchangerequesturl' then
+          begin
+            JSONObject.removepair('gitchangerequesturl');
+            JSONObject.addpair('gitchangerequesturl', gitchangerequesturl);
+            Confound := True;
+            Break;
+          end;
+        if not Confound then
+          JSONObject.addpair('gitchangerequesturl', gitchangerequesturl);
+
+        AssignFile(UserJsonFile, 'appsetting.config');
+        Rewrite(UserJsonFile);
+
+        TotalJSONText := JSONObject.ToString;
+        TotalJSONText := StringReplace(TotalJSONText, '\', '\\',
+          [rfReplaceAll]);
+
+        appwriteln(UserJsonFile, TotalJSONText);
+        CloseFile(UserJsonFile);
+
+        JSONObject.Free;
+
+        appwriteln('ChangeRequest git url updated successfully..!');
+        WriteLog('ChangeRequest git url : ' + gitchangerequesturl);
+        WriteLog('ChangeRequest git url updated successfully.');
 
         ReloadConfig();
 
@@ -5000,6 +5184,7 @@ begin
       git.pullStructuresfromgit;
 
     bPullStructures := False;
+    insallstatus := 'Structure';
     try
       WriteLog('InstallPluginWithoutweb function started..');
       appwriteln;
@@ -5040,16 +5225,28 @@ begin
   if bGitPullIncomplete then
   begin
     WriteLog('Git Pull Incomplete');
-    WriteLog('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
+//    WriteLog('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
+//{$IFDEF CONSOLE_APP}
+//    // console
+//    Console_write
+//      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.',
+//      10);
+//{$ELSE}
+//    // raise exception
+//    raise Exception.Create
+//      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
+//{$ENDIF};
+
+    WriteLog('Installation cannot continue because one or more files were not successfully retrieved from the Git repository. The installation has been stopped to prevent incomplete or incorrect file placement.');
 {$IFDEF CONSOLE_APP}
     // console
     Console_write
-      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.',
+      ('Installation cannot continue because one or more files were not successfully retrieved from the Git repository. The installation has been stopped to prevent incomplete or incorrect file placement.',
       10);
 {$ELSE}
     // raise exception
     raise Exception.Create
-      ('Failed to pull the Product files from the Git repository. The Product may not exist or could not be retrieved.');
+      ('Installation cannot continue because one or more files were not successfully retrieved from the Git repository. The installation has been stopped to prevent incomplete or incorrect file placement.');
 {$ENDIF};
     bGitPullIncomplete := False;
     appwriteln;
@@ -5105,6 +5302,7 @@ begin
   end;
   if patchOrPlugin = 'Plugin' then
   begin
+    insallstatus := 'Full';
     inst.InstallPlugin(installationType);
     database.DatabaseConnection();
     database.installOperation();
@@ -5153,6 +5351,41 @@ begin
     appwriteln;
     AppWrite('  -');
     Console_write(selectedProduct, 3);
+    AppWrite(' installation completed without errors.');
+    WriteUserInstructions;
+    appwriteln;
+    appwriteln;
+    AppWrite('AxInstaller> ');
+
+{$IFDEF CONSOLE_APP}
+    Command := ReadInput;
+
+    if Command = '' then
+      parseCommand(Command)
+    else
+      parseCommand(Command);
+{$ELSE}
+    // nothing
+{$ENDIF}
+  end;
+
+   if patchOrPlugin = 'ChangeRequest' then
+  begin
+{$IFNDEF CONSOLE_APP}
+    if IsCRInstall then
+    begin
+      PushInstallUpdateToRedis('', '', 'EXTRACTING');
+    end;
+{$ENDIF};
+    ExtractZipFiles(ChangeRequestLocalPath + selectedCR +'\'+requestedVersion);
+    inst.InstallProduct(installationType);
+    //database.DatabaseConnection();
+    database.installOperation();
+    appwriteln(' INSTALLATION SUMMARY  ');
+    appwriteln('=======================');
+    appwriteln;
+    AppWrite('  -');
+    Console_write(selectedCR, 3);
     AppWrite(' installation completed without errors.');
     WriteUserInstructions;
     appwriteln;
@@ -5325,11 +5558,16 @@ begin
     'It will add new/update git url for plugin repository.');
   appwriteln;
   appwriteln;
-  Console_write('config set Producturl', 10);
+  Console_write('config set producturl', 10);
   AppWrite('' + #9 + #9 + #9 + #9 +
-    'It will add new/update git url for Product repository.');
+    'It will add new/update git url for product repository.');
   appwriteln;
   appwriteln;
+//  Console_write('config set changerequesturl', 10);
+//  AppWrite('' + #9 + #9 + #9 + #9 +
+//    'It will add new/update git url for changerequest repository.');
+//  appwriteln;
+//  appwriteln;
   Console_write('list plugins', 10);
   AppWrite('' + #9 + #9 + #9 + #9 + #9 +
     'Lists all available plugins from the GIT repository.');
@@ -5354,12 +5592,23 @@ begin
 
   appwriteln;
   appwriteln;
-  Console_write('install Product <Product_name>', 10);
+  Console_write('install "<plugin_name>" -web', 10);
   AppWrite('' + #9 + #9 + #9 +
-    'Pulls the selected Product from the GIT repository and installs it into the target application.');
+  'Executes only scripts and import structures of selected Plugin into the target application.');
+  appwriteln;
+  appwriteln;
+  Console_write('install product <product_name>', 10);
+  AppWrite('' + #9 + #9 + #9 +
+    'Pulls the selected product from the GIT repository and installs it into the target application.');
 
   appwriteln;
   appwriteln;
+//  Console_write('install changerequest <changerequest_name>', 10);
+//  AppWrite('' + #9 + #9 + #9 +
+//    'Pulls the selected changerequest from the GIT repository and installs it into the target application.');
+//
+//  appwriteln;
+//  appwriteln;
   Console_write('install <product_version> <release_name>', 10);
   AppWrite('' + #9 +
     'Pulls the selected release from the GIT repository and installs/applies it to the target application.');
@@ -5847,13 +6096,21 @@ end;
 //  //
 //end;
 
-procedure TMain.StoreLatestVersion(const ProductVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+procedure TMain.StoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
 var
   Installation: TInstallation;
 begin
   WriteLog('StoreLatestVersion - Start');
-  WriteLog('Product Name : ' + selectedProduct);
-  WriteLog('Product Version : ' + ProductVersion);
+
+  if selectedProduct<>'' then
+   WriteLog('Product Name : ' + selectedProduct);
+
+
+  if selectedCR<>'' then
+   WriteLog('ChangeRequest Name : ' + selectedCR);
+
+
+  WriteLog('Version : ' + ProductOrCRVersion);
 
   Installation := nil;
  try
@@ -5864,12 +6121,11 @@ begin
 
     WriteLog('TInstallation object created successfully');
 
-    Installation.StoreLatestVersionToDb(
-      selectedProduct,
-      ProductVersion,
-      ResultOfInstallation,
-      ResultOfInstallMsg
-    );
+  if selectedProduct<>'' then
+    Installation.StoreLatestVersionToDb(selectedProduct,ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg);
+
+  if selectedCR<>'' then
+    Installation.StoreLatestVersionToDb(selectedCR,ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg);
 
     WriteLog('StoreLatestVersionToDb completed successfully');
     WriteLog('StoreLatestVersion - Completed');
@@ -5878,8 +6134,14 @@ begin
     on E: Exception do
     begin
       WriteLog('StoreLatestVersion - FAILED');
-      WriteLog('Product Name : ' + selectedProduct);
-      WriteLog('Product Version : ' + ProductVersion);
+
+      if selectedProduct <> '' then
+        WriteLog('Product Name : ' + selectedProduct);
+
+      if selectedCR<>'' then
+        WriteLog('ChangeRequest Name : ' + selectedCR);
+
+      WriteLog('Version : ' + ProductOrCRVersion);
       WriteLog('Exception Class : ' + E.ClassName);
       WriteLog('Error : ' + E.Message);
 
@@ -5906,7 +6168,13 @@ begin
   Result := '';
 
   WriteLog('GetLatestVersion - Start');
-  WriteLog('Product Name : ' + selectedProduct);
+
+  if selectedProduct <> '' then
+   WriteLog('Product Name : ' + selectedProduct);
+
+  if selectedCR <> '' then
+   WriteLog('ChangeRequest Name : ' + selectedCR);
+  
 
   Installation := nil;
  try
@@ -5917,7 +6185,12 @@ begin
 
     WriteLog('TInstallation object created successfully');
 
-    Result := Installation.GetStoredVersionFromDB(selectedProduct);
+    if selectedProduct<>'' then
+      Result := Installation.GetStoredVersionFromDB(selectedProduct);
+
+    if selectedCR<>'' then
+       Result := Installation.GetStoredVersionFromDB(selectedCR);
+
 
     WriteLog('Stored version returned : ' + Result);
     WriteLog('GetLatestVersion - Completed');
@@ -5926,7 +6199,12 @@ begin
     on E: Exception do
     begin
       WriteLog('GetLatestVersion - FAILED');
-      WriteLog('Product Name : ' + selectedProduct);
+      if selectedProduct<> '' then
+        WriteLog('Product Name : ' + selectedProduct);
+
+      if selectedCR <> '' then
+        WriteLog('ChangeRequest Name : ' + selectedCR);
+
       WriteLog('Exception Class : ' + E.ClassName);
       WriteLog('Error : ' + E.Message);
 
@@ -5947,11 +6225,11 @@ begin
   end;
 end;
 
-function TMain.GetAndStoreLatestVersion(const ProductVersion,ResultOfInstallation,ResultOfInstallMsg: string;
+function TMain.GetAndStoreLatestVersion(const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string;
   IsGet: Boolean): string;
 begin
   WriteLog('GetAndStoreLatestVersion Is started.....');
-  WriteLog('Version Given : ' + ProductVersion +' IsGetVERSION : ' + BoolToStr(IsGet, True));
+  WriteLog('Version Given : ' + ProductOrCRVersion +' IsGetVERSION : ' + BoolToStr(IsGet, True));
   Result := '';
 
   if IsGet then
@@ -5960,7 +6238,7 @@ begin
   end
   else
   begin
-    StoreLatestVersion(ProductVersion,ResultOfInstallation,ResultOfInstallMsg);
+        StoreLatestVersion(ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg);
   end;
 
 end;

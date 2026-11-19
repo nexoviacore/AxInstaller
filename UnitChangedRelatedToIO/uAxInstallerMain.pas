@@ -317,6 +317,9 @@ begin
   bConnectTempDB := False;
   IsProductInstall := False;
   IsCRInstall := False;
+  {$IFDEF CONSOLE_APP}
+    IsSessionIdFromPayload := False;
+  {$ENDIF};
   bGitPullIncomplete := False; // Pull completed successfully
   // AppDir := IncludeTrailingBackslash(GetCurrentDir);
 
@@ -3627,7 +3630,7 @@ begin
                 begin
                   AlreadyInstalledVersion := GetAndStoreLatestVersion('','','',True);
                   WriteLog('The previous installed version is :'+AlreadyInstalledVersion);
-                  if (AlreadyInstalledVersion <> '') and
+                 if (AlreadyInstalledVersion <> '') and (lowercase(AlreadyInstalledVersion) <> 'latest')  and
                   (CompareProductVersion(LowerCase(RequestedVersion),LowerCase(AlreadyInstalledVersion)) <= 0)then
                   begin
                       WriteLog('The previous installed version is higher or may be equal, so exiting here');
@@ -3636,7 +3639,11 @@ begin
                         'Already Latest Version ' + AlreadyInstalledVersion +
                         ' is installed. Try next versions.'
                       );
-                   end;
+                   end
+                 else
+                  begin
+                     WriteLog('The previous installed version is empty or it may be ''latest'' in DB, so continuing with the next process');
+                  end;
                 end;
                end;
               end;
@@ -3752,7 +3759,7 @@ begin
                 begin
                   AlreadyInstalledVersion := GetAndStoreLatestVersion('','','',True);
                   WriteLog('The previous installed version is :'+AlreadyInstalledVersion);
-                  if (AlreadyInstalledVersion <> '') and
+                  if (AlreadyInstalledVersion <> '') and (lowercase(AlreadyInstalledVersion) <> 'latest') and
                   (CompareProductVersion(LowerCase(RequestedVersion),LowerCase(AlreadyInstalledVersion)) <= 0)then
                   begin
                       WriteLog('The previous installed version is higher or may be equal, so exiting here');
@@ -3761,7 +3768,11 @@ begin
                         'Already Latest Version ' + AlreadyInstalledVersion +
                         ' is installed. Try next versions.'
                       );
-                   end;
+                  end
+                  else
+                  begin
+                     WriteLog('The previous installed version is empty or it may be ''latest'' in DB, so continuing with the next process');
+                  end;
                 end;
                end;
               end;

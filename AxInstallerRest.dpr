@@ -127,7 +127,8 @@ uses
   uConnect in '\\192.168.2.6\Axpert9-XE3\Ver 11.4\CommonObjs\uConnect.pas',
   uDBManager in '\\192.168.2.6\Axpert9-XE3\Ver 11.4\CommonObjs\uDBManager.pas',
   uInstallUpdatesToRedis in 'UnitChangedRelatedToIO\uInstallUpdatesToRedis.pas',
-  uCreateStructure in 'ChangedUnits\uCreateStructure.pas' {------------------------------------------------------------------};
+  uCreateStructure in 'ChangedUnits\uCreateStructure.pas',
+  uRedisConnection in 'UnitChangedRelatedToIO\uRedisConnection.pas';
 
 { ------------------------------------------------------------------ }
 { ISAPI entry points - exported for IIS                               }

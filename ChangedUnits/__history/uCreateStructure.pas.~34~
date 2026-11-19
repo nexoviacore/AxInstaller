@@ -132,6 +132,7 @@ type
     actnode,dtasknode : ixmlnode;
     bIsPublishStructure : Boolean;
     bSkipExistingStructureImport : Boolean;
+    bSkipPageCreation: Boolean;
 
 
     Constructor Create(Axpro: TAxprovider);
@@ -174,6 +175,7 @@ begin
   bSkipActionNodePreparation := False;
   sIncludePage := '';
   bSkipExistingStructureImport := False;
+  bSkipPageCreation := False;
 end;
 
 destructor TCreateStructure.Destroy;
@@ -1923,7 +1925,10 @@ begin
     else
       FImportDiff.ImportStructure(FName,fxml);
     WriteInToLog('5');
-    if not chkpageexists(FName) then CreatePageXML;
+    if (not bSkipPageCreation) and (not chkpageexists(FName)) then
+    begin
+      CreatePageXML;
+    end;
   finally
     CloseFile(f1);
   end;
@@ -3330,6 +3335,7 @@ var
   tmnode,oenode: IXMLNode;
   changeDCList : String;
   oxml : IXMLDocument;
+  HasNOdefPage : boolean;
 begin
   writeintolog('WriteTStructDef starts');
 
@@ -3373,7 +3379,7 @@ begin
     except
     end;
     if assigned(oxml) then begin
-       if bSkipExistingStructureImport then
+       if (oxml.documentelement.childnodes.count <> 0) and bSkipExistingStructureImport then
        begin
           writeintolog('Skipping the import of structure **'+stransid+'**, as it already exists.');
 
@@ -3403,6 +3409,7 @@ begin
     tmnode := enode.ChildNodes.FindNode('temp'); // Find temp node
     if Assigned(tmnode) then
     begin
+      HasNOdefPage := false;
       menupos := VarToStr(tmnode.ChildValues['menupos']); // read menupos value
       menulist := VarToStr(tmnode.ChildValues['menulist']);
       //Replace \\ to \ --This is not needed since its handled in udocoreaction
@@ -3410,12 +3417,18 @@ begin
       // read menulist value
 
       //Set defaultPage - isacoretrans
-      CreateDefPage := VartoStr(tmnode.ChildValues['defpage']) = 'false';
+      HasNOdefPage := VartoStr(tmnode.ChildValues['defpage']) = 'false';
+      CreateDefPage := hasdefpage;
+//      CreateDefPage := VartoStr(tmnode.ChildValues['defpage']) = 'false';
       //Read Inlcudepage value
       sIncludePage := VarToStr(tmnode.ChildValues['includepage']);
       //Set CreatePage True when IncludePage is t/true
       if (Lowercase(sIncludePage) = 't') or (Lowercase(sIncludePage) = 'true') then
          CreateDefPage := True;
+     //bSkipPageCreation handling should work only in AxInstaller EXE and REST DLL
+      bSkipPageCreation := HasNOdefPage;
+//       or (Lowercase(Trim(sIncludePage)) = 't') or (Lowercase(Trim(sIncludePage)) = 'true');
+
       GetPageFolderName;
       // Calling GetPagefoldername to get Page foldername and ordnum
 

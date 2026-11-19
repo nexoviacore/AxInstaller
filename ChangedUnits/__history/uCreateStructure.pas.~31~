@@ -7,6 +7,8 @@ Uses Windows, Forms, SysUtils, XMLDoc, XMLIntf, Dialogs, Variants, Classes,uAxpr
      uXDS, uImportDiff, uImportStructDef,uAutoPageCreate,ustructintable, uTasks, uStructDef,
      uListView,uFrameSQL,AXMLibrary,DBXJSON,IOUtils,System.StrUtils,IdGlobal;
 
+     var
+       SkippedTransIdsList: TStringList;
 type
 
   TCreateStructure = Class
@@ -129,8 +131,8 @@ type
     bSkipSaveStructureToDB,bSkipLviewCreationONPublish : Boolean;
     actnode,dtasknode : ixmlnode;
     bIsPublishStructure : Boolean;
-
     bSkipExistingStructureImport : Boolean;
+    bSkipPageCreation: Boolean;
 
 
     Constructor Create(Axpro: TAxprovider);
@@ -172,6 +174,8 @@ begin
   bIsPublishStructure := False;
   bSkipActionNodePreparation := False;
   sIncludePage := '';
+  bSkipExistingStructureImport := False;
+  bSkipPageCreation := False;
 end;
 
 destructor TCreateStructure.Destroy;
@@ -1921,7 +1925,10 @@ begin
     else
       FImportDiff.ImportStructure(FName,fxml);
     WriteInToLog('5');
-    if not chkpageexists(FName) then CreatePageXML;
+    if (not bSkipPageCreation) and (not chkpageexists(FName)) then
+    begin
+      CreatePageXML;
+    end;
   finally
     CloseFile(f1);
   end;
@@ -3328,6 +3335,7 @@ var
   tmnode,oenode: IXMLNode;
   changeDCList : String;
   oxml : IXMLDocument;
+  hasdefpage : boolean;
 begin
   writeintolog('WriteTStructDef starts');
 
@@ -3371,6 +3379,16 @@ begin
     except
     end;
     if assigned(oxml) then begin
+       if (oxml.documentelement.childnodes.count <> 0) and bSkipExistingStructureImport then
+       begin
+          writeintolog('Skipping the import of structure **'+stransid+'**, as it already exists.');
+
+          //
+          if SkippedTransIdsList.IndexOf(stransid) = -1 then
+            SkippedTransIdsList.Add(stransid);
+          //
+          Exit;
+       end;
       oenode := oxml.DocumentElement;
       if assigned(oenode) then begin
         actnode := oenode.ChildNodes.FindNode('actions');
@@ -3391,6 +3409,7 @@ begin
     tmnode := enode.ChildNodes.FindNode('temp'); // Find temp node
     if Assigned(tmnode) then
     begin
+      hasdefpage := false;
       menupos := VarToStr(tmnode.ChildValues['menupos']); // read menupos value
       menulist := VarToStr(tmnode.ChildValues['menulist']);
       //Replace \\ to \ --This is not needed since its handled in udocoreaction
@@ -3398,12 +3417,18 @@ begin
       // read menulist value
 
       //Set defaultPage - isacoretrans
-      CreateDefPage := VartoStr(tmnode.ChildValues['defpage']) = 'false';
+      HasNOdefPage := VartoStr(tmnode.ChildValues['defpage']) = 'false';
+      CreateDefPage := hasdefpage;
+//      CreateDefPage := VartoStr(tmnode.ChildValues['defpage']) = 'false';
       //Read Inlcudepage value
       sIncludePage := VarToStr(tmnode.ChildValues['includepage']);
       //Set CreatePage True when IncludePage is t/true
       if (Lowercase(sIncludePage) = 't') or (Lowercase(sIncludePage) = 'true') then
          CreateDefPage := True;
+     //bSkipPageCreation handling should work only in AxInstaller EXE and REST DLL
+      bSkipPageCreation := not HasNOdefPage;
+//       or (Lowercase(Trim(sIncludePage)) = 't') or (Lowercase(Trim(sIncludePage)) = 'true');
+
       GetPageFolderName;
       // Calling GetPagefoldername to get Page foldername and ordnum
 
@@ -5413,6 +5438,12 @@ begin
   end;
   writeintolog('GetLviewHyperlinkField end.');
 end;
+
+initialization
+  SkippedTransIdsList := TStringList.Create;
+
+finalization
+  SkippedTransIdsList.Free;
 
 
 end.

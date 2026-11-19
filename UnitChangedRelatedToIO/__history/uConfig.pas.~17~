@@ -5,7 +5,7 @@ interface
 uses
   System.SysUtils, Dialogs, System.IOUtils, windows, System.Classes, uUtils,
   uDBManager,
-  Data.DBXJSON, XMLDoc, XMLIntf, uAxLog, uDbConnect,uAppIO;
+  Data.DBXJSON, XMLDoc, XMLIntf, uAxLog, uDbConnect,uAppIO,uRedisConnection;
 
 type
   TConfig = class
@@ -297,6 +297,7 @@ var
   JSONText: String;
 begin
   writelog('readconfigfile function started..');
+  writelog('DLL Path '+ GetDllPath);
   if FileExists(AppDir +'appsetting.config') then
   begin
     JSONText := TFile.ReadAllText(AppDir +'appsetting.config');
@@ -483,6 +484,7 @@ var
   EncrptPass: string;
   FilePath, JSONText: string;
   JSONObject: TJSONObject;
+  RedisConnection: TRedisConnection;
 begin
   try
     writelog('readReleasePasswordandGitUrl function started..');
@@ -518,10 +520,143 @@ begin
     else
       GitPluginUrl := '';
 
+    if assigned(JSONObject.Get('gitproducturl')) then
+      GitProductUrl := Trim(JSONObject.Get('gitproducturl').JsonValue.Value)
+    else
+      GitProductUrl := '';
+
+    if assigned(JSONObject.Get('gitchangerequesturl')) then
+      gitChangeRequesturl := Trim(JSONObject.Get('gitchangerequesturl').JsonValue.Value)
+    else
+      gitChangeRequesturl := '';
+
+    if assigned(JSONObject.Get('armsigninurl')) then
+      ArmSignInUrl := Trim(JSONObject.Get('armsigninurl').JsonValue.Value)
+    else
+      ArmSignInUrl := '';
+
+    if assigned(JSONObject.Get('armaxputurl')) then
+      ArmAxPutUrl := Trim(JSONObject.Get('armaxputurl').JsonValue.Value)
+    else
+      ArmAxPutUrl := '';
+
+    if assigned(JSONObject.Get('armbaseurl')) then
+      ArmBaseUrl := Trim(JSONObject.Get('armbaseurl').JsonValue.Value)
+    else
+      ArmBaseUrl := '';
+
     SetPatchLocalPath;
     writelog('Git Url : ' + GitPatchURL);
     writelog('Git Plugin Url : ' + GitPluginUrl);
+    writelog('Git Product Url : ' + GitProductUrl);
+    writelog('Git Change Request Url : ' + gitchangerequesturl);
+    writelog('ARM Base Url : ' + ArmBaseUrl);
     writelog('Got password in decrypted format');
+
+    //Temp url change
+    {$IFNDEF CONSOLE_APP}
+    if (TempGitRepo <> '') and (TempGitAcc <> '') and (installtype <> '') then
+begin
+  WriteLog('TempGitAcc: ' + TempGitAcc);
+  WriteLog('TempGitRepo: ' + TempGitRepo);
+
+  if lowercase(installtype) = 'plugin' then
+  begin
+    WriteLog('Original GitPluginURL: ' + GitPluginURL);
+
+    GitPluginURL := 'https://api.github.com/repos/' +
+                    TempGitAcc + '/' + TempGitRepo + '/contents/';
+
+    WriteLog('Updated GitPluginURL: ' + GitPluginURL);
+  end
+  else if lowercase(installtype) = 'product' then
+  begin
+    WriteLog('Original GitProductURL: ' + GitProductURL);
+
+    GitProductURL := 'https://api.github.com/repos/' +
+                     TempGitAcc + '/' + TempGitRepo + '/contents/';
+
+    WriteLog('Updated GitProductURL: ' + GitProductURL);
+  end
+  else if lowercase(installtype) = 'changerequest' then
+  begin
+    WriteLog('Original GitChangeRequestURL: ' + GitChangeRequestURL);
+
+    GitChangeRequestURL := 'https://api.github.com/repos/' +
+                           TempGitAcc + '/' + TempGitRepo + '/contents/';
+
+    WriteLog('Updated GitChangeRequestURL: ' + GitChangeRequestURL);
+  end;
+end
+else
+begin
+  WriteLog('Temporary Git account or repository not provided. Keeping default Git URL.');
+end;
+
+  ///redis
+  if IsSessionIdFromPayload then
+  begin
+//  JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+//
+//  JSONObject := TJSONObject.ParseJSONValue(
+//    JSONObject.Get('appsettings').JsonValue.Value
+//  ) as TJSONObject;
+//
+//  JSONObject := TJSONObject.ParseJSONValue(
+//    JSONObject.Get(projectname).JsonValue.Value
+//  ) as TJSONObject;
+//
+//  JSONObject := TJSONObject.ParseJSONValue(
+//    JSONObject.Get('Redis').JsonValue.Value) as TJSONObject;
+//
+//  ProjectRedisDetails := JSONObject;
+     WriteLog('Session ID found in payload. Retrieving Redis details.');
+
+  if Assigned(JSONObject.Get('appsettingsinipath')) then
+    AppSettingsIniPath := Trim(
+      JSONObject.Get('appsettingsinipath').JsonValue.Value)
+  else
+    AppSettingsIniPath := '';
+
+  WriteLog('AppSettings.ini path: ' + AppSettingsIniPath);
+
+  if AppSettingsIniPath = '' then
+  begin
+    WriteLog('AppSettings.ini path is missing in the payload.');
+    raise Exception.Create(
+      'AppSettings.ini path is missing in the payload.'
+    );
+  end;
+
+  WriteLog('Retrieving Redis configuration for project: ' + projectname);
+
+  RedisConnection := TRedisConnection.Create;
+  try
+    try
+      RedisConnection.GetRedisDetailsFromAppSettingsIni(
+        AppSettingsIniPath,
+        projectname,
+        ProjectRedisDetails
+      );
+
+      WriteLog('Redis details retrieved successfully.');
+
+    except
+      on E: Exception do
+      begin
+        WriteLog(
+          'Error while retrieving Redis details: ' + E.Message
+        );
+        raise;
+      end;
+    end;
+  finally
+    RedisConnection.Free;
+  end;
+end;
+{$ENDIF};
+
+
     writelog('readReleasePasswordandGitUrl function ends..');
   finally
     Freeandnil(dbm);
@@ -566,6 +701,7 @@ begin
     writelog('Making ' + projectname + ' as a active connection.');
     Appwriteln;
     // Showmessage('JSONText ');
+    writelog('reading appsetting file from appdir if block');
     JSONText := TFile.ReadAllText(AppDir +'appsetting.config');
     JSONText := Trim(JSONText);
     JSONText := StringReplace(JSONText, '\\', '\',
@@ -573,12 +709,13 @@ begin
     JSONText := StringReplace(JSONText, '\', '\\',
       [rfReplaceAll, rfIgnoreCase]);
     JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+    writelog('If block after json parse getting appsettings');
     AppJSONObject := JSONObject.Get('appsettings').JsonValue as TJSONObject;
     for Pair in AppJSONObject do
     begin
       if LowerCase(Pair.JSONString.Value) = LowerCase(projectname) then
       begin
-        activeconnection := LowerCase(setdef);
+        activeconnection := setdef; //LowerCase(setdef);
         JSONObject.removepair('activeapp');
         activeconnection := projectname;
         JSONObject.addpair('activeapp', activeconnection);
@@ -618,12 +755,13 @@ begin
       [rfReplaceAll, rfIgnoreCase]);
     JSONText := StringReplace(JSONText, '\', '\\',
       [rfReplaceAll, rfIgnoreCase]);
-    writelog('after reading parsing json);
+    writelog('after reading parsing json');
     JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
     writelog('getting appsettings from json file');
     AppJSONObject := JSONObject.Get('appsettings').JsonValue as TJSONObject;
     if length(JSONObject.Get('activeapp').JsonValue.ToString) > 2 then
     begin
+      writelog('active connection found');
       activeconnection := JSONObject.Get('activeapp').JsonValue.Value;
       // AppWriteln;
       Console_Write('Current active connection :', 14);
@@ -836,6 +974,12 @@ begin
         apparchitecture := prjObject.Get('apparchitecture').JsonValue.Value;
         // currentwebpatch := prjObject.Get('currentwebpatch').JsonValue.Value;
         // currentwebpatch:='AxpertWeb/'+currentwebpatch; currentpatchnumber
+
+        if Assigned(prjObject.Get('iispluginapppath')) then
+          iispluginapppath := prjObject.Get('iispluginapppath').JsonValue.Value
+        else
+          iispluginapppath := '';
+
         currentversionname := prjObject.Get('currentversionname')
           .JsonValue.Value;
         if pos(#$D#$A, currentversionname) <> 0 then
@@ -849,6 +993,22 @@ begin
 
         DecrAccessToken := prjObject.Get('Access_Token').JsonValue.Value;
         Access_Token := dbm.gf.DecryptFldValue(DecrAccessToken, 't');
+
+
+    //Temporary token change as request came from axi command line(16-11-26) url and repo change
+    //will occur in  readreleasePasswordandGitUrl function.
+    {$IFNDEF CONSOLE_APP}
+    if (TempGitRepo <> '') and (TempGitAcc <> '') and (TempGitTok <> '') and (installtype <> '') then
+      begin
+        WriteLog('TempGitToken: ' + TempGitTok);
+
+        WriteLog('Original GitToken: ' + Access_Token);
+
+        Access_Token := TempGitTok;
+
+        WriteLog('Updated GitToken: ' + Access_Token);
+      end
+    {$ENDIF};
 
       end;
       // if bUpdateConfig then
@@ -991,6 +1151,8 @@ begin
         TJSONString.Create(currentversionname);
       prjJSONObject.Get('currentpatchname').JsonValue :=
         TJSONString.Create(currentpatchname);
+      prjJSONObject.Get('iispluginapppath').JsonValue :=
+        TJSONString.Create(iispluginapppath);
       // prjJSONObject.Get('currentdevpatch').JsonValue :=
       // TJSONString.Create(currentdevpatch);
       // prjJSONObject.Get('currentarmpatch').JsonValue :=
@@ -1026,12 +1188,12 @@ begin
     newObject.addpair('devscriptpath', TJSONString.Create(devscriptpath));
     newObject.addpair('agileconnectpath', TJSONString.Create(agileconnectpath));
     newObject.addpair('armapipath', TJSONString.Create(armapipath));
-    newObject.addpair('armscriptpath', TJSONString.Create(armapipath));
+    newObject.addpair('armscriptpath', TJSONString.Create(armscriptpath));
     newObject.addpair('armservicepath', TJSONString.Create(armservicepath));
     // rmqclientpath
     newObject.addpair('apparchitecture', TJSONString.Create(apparchitecture));
-    newObject.addpair('currentversionname',
-      TJSONString.Create(currentversionname));
+    newObject.addpair('iispluginapppath', TJSONString.Create(iispluginapppath));
+    newObject.addpair('currentversionname', TJSONString.Create(currentversionname));
     newObject.addpair('currentpatchname', TJSONString.Create(currentpatchname));
     // newObject.addpair('currentdevpatch', TJSONString.Create(currentdevpatch));
     // newObject.addpair('currentarmpatch', TJSONString.Create(currentarmpatch));
@@ -1277,6 +1439,7 @@ var
 
 begin
   writelog('CreateConfig function started..');
+  writelog('File name : '+ AppDir+'appsetting.config');
   AssignFile(configFile, AppDir +'appsetting.config');
   Rewrite(configFile);
   // JsonData := CreateJson();
@@ -1547,13 +1710,13 @@ begin
     runwebcodepath := StringReplace(runwebcodepath, '\', '\\',
       [rfReplaceAll, rfIgnoreCase]);
 
-    Console_write('6.', 4);
-    devwebcodepath := ReadInputs('Axpert Dev code Path', False);
+    if pos('10.', LowerCase(currentversionname)) > 0 then
+      writeln('Hint: AxpertDevCode is mandatory during upgradation to 11X');
+
+    Console_Write('6.', 4);
+    devwebcodepath := ReadInputs('Axpert Dev code Path');//, False);
     devwebcodepath := StringReplace(devwebcodepath, '\', '\\',
       [rfReplaceAll, rfIgnoreCase]);
-
-    if pos('10.', LowerCase(currentversionname)) > 0 then
-      AppWriteln('Hint: AxpertDevCode is mandatory during upgradation to 11X');
 
     Console_write('7.', 4);
     runscriptpath := ReadInputs('Axpert Run Script Path');
@@ -1597,6 +1760,10 @@ begin
     Console_Write('13.', 4);
     apparchitecture := ReadInputs('Axpert apparchitecture (32bit/64bit)');
 
+    Console_Write('14.', 4);
+    iispluginapppath := ReadInputs('IIS Plugin Application Path ', False);
+    // Normalize backslash to forward slash for consistent parsing
+    iispluginapppath := StringReplace(iispluginapppath, '\', '/', [rfReplaceAll]);
     if not assigned(dbc_conf) then
       dbc_conf := TDbConnect.Create;
     try
@@ -1625,6 +1792,10 @@ begin
     end;
     writelog('FillUserInfo function ends..');
     AppWriteln;
+	//The globally used variable is being overwritten while adding a new connection.
+    //As a temporary workaround, calling ReadActiveConnection resolves the issue.
+    //However, this should be handled more appropriately in the code to avoid relying on this workaround.
+
   finally
     // dbc.Free;
     // bDBConDuring_Install := True;
@@ -1824,6 +1995,7 @@ begin
       // rmqclientpath
       // AppJSONObject.AddPair('runwebcodepath', TJSONString.Create(''));
       PrjJSONObjet.addpair('apparchitecture', TJSONString.Create(''));
+      PrjJSONObjet.addpair('iispluginapppath', TJSONString.Create(''));
       PrjJSONObjet.addpair('currentpatchname', TJSONString.Create(''));
       PrjJSONObjet.addpair('currentversionname', TJSONString.Create(''));
       // PrjJSONObjet.addpair('currentdevpatch', TJSONString.Create(''));

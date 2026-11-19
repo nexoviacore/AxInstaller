@@ -6,7 +6,7 @@ uses
   uDBManager, uAxProvider, uGeneralFunctions, uStructDef, System.SysUtils,
   System.IOUtils, windows, System.Classes, System.Generics.Collections, uXDS,
   XMLDoc, XMLIntf, uDBConnect, uGitManager, System.RegularExpressions, uAppIO,
-  System.Zip,System.Types;
+  System.Zip,System.Types,Data.DBXJSON;
 
 var
   userresp: string;
@@ -34,9 +34,13 @@ var
   pluginLocalPath, patchLocalPath, patchtobeinstall, currentpatchname,
     currentversionname: string;
   gitProducturl, ProductLocalPath, selectedProduct,requestedVersion,VersionTakenFromVersionInfo,
-  installtype,selectedCR,gitChangeRequesturl,ChangeRequestLocalPath,TempGitAcc,TempGitRepo:string;
+  installtype,selectedCR,gitChangeRequesturl,ChangeRequestLocalPath,TempGitAcc,TempGitRepo,TempGitTok:string;
   IsVersionInstall: boolean = False;
   armsigninurl, armaxputurl, armbaseurl: string;
+  armsessionidfromredis, armtokenfromredis: string;
+  AppSettingsIniPath: string ;
+  ProjectRedisDetails : TJSONObject;
+  isSessionIdFromPayload: boolean;
   curdir, logCreation, adminpwd: string;
   continuousinstallation: boolean;
   dbm: TDBManager;

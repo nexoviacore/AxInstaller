@@ -126,7 +126,8 @@ uses
   uAppIO in 'UnitChangedRelatedToIO\uAppIO.pas',
   uConnect in '\\192.168.2.6\Axpert9-XE3\Ver 11.4\CommonObjs\uConnect.pas',
   uDBManager in '\\192.168.2.6\Axpert9-XE3\Ver 11.4\CommonObjs\uDBManager.pas',
-  uInstallUpdatesToRedis in 'UnitChangedRelatedToIO\uInstallUpdatesToRedis.pas';
+  uInstallUpdatesToRedis in 'UnitChangedRelatedToIO\uInstallUpdatesToRedis.pas',
+  uRedisConnection in 'UnitChangedRelatedToIO\uRedisConnection.pas';
 
 var
   MainInstance: TMain;

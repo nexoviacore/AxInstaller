@@ -19,7 +19,7 @@ uses
   idreplysmtp, MessageDigest_5, uStructInTable,
   IdHTTP, uAxLog,
   Soap.EncdDecd, IdCoder, IdCoder3to4, IdCoderMIME, uDBManager, uConnect,
-  uCompress, ZLib, {uImportDiff,} uImportStructDef, uAppIo, System.IOUtils,
+  uCompress, ZLib, {uImportDiff,} uImportStructDef, uAppIo, System.IOUtils,uRedisConnection,
 {$IF CompilerVersion > 24.0}
   JSON
 {$ELSE}
@@ -845,7 +845,10 @@ begin
     writelog('Calling sf.WriteTStructDef...');
 
     try
-      sf.bSkipExistingStructureImport := True;
+      // 12-11-2026: Disabled skipping of already-installed structures
+      // to allow reinstallation during Product/CR installation.
+      //sf.bSkipExistingStructureImport := True;
+      sf.bSkipExistingStructureImport := False;;
       sf.WriteTStructDef(FileName, sXML);
     except
       on E: Exception do
@@ -1751,6 +1754,9 @@ var
   AxPutPayloadObj: TJSONObject;
 
   StartTime: Cardinal;
+
+
+  RedisConnection: TRedisConnection;
 begin
   Result := False;
 
@@ -1862,11 +1868,50 @@ begin
       'Authenticating with ARM.'
     );
 
-    DoSignIn(
-      ArmSignInUrl,
-      ARMSessionId,
-      Token
-    );
+//    DoSignIn(
+//      ArmSignInUrl,
+//      ARMSessionId,
+//      Token
+//    );
+    RedisConnection := TRedisConnection.Create;
+    try
+      if IsSessionIdFromPayload then
+      begin
+        writelog('ARMSessionId found in payload. Retrieving credentials from Redis.');
+
+        RedisConnection.GetRedisCredentials(
+          ARMSessionIdFromRedis,
+          ProjectRedisDetails,
+          ARMSessionId,
+          Token
+        );
+
+        if (Trim(ARMSessionId) = '') or (Trim(Token) = '') then
+        begin
+          writelog('Redis credentials are empty. Falling back to SignIn.');
+
+          DoSignIn(
+            ArmSignInUrl,
+            ARMSessionId,
+            Token
+          );
+        end
+        else
+          writelog('Redis credentials retrieved successfully.');
+      end
+      else
+      begin
+        writelog('ARMSessionId not found in payload. Proceeding with SignIn.');
+
+        DoSignIn(
+          ArmSignInUrl,
+          ARMSessionId,
+          Token
+        );
+      end;
+    finally
+      RedisConnection.Free;
+    end;
 
     writelog(
       'Authentication completed successfully.'

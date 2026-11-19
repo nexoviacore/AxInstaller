@@ -214,6 +214,12 @@ begin
   ATrace   := GetJSONString(AJSONObj, 'trace');
   AxIns_Username := GetJSONString(AJSONObj, 'username');
   AxIns_ProductID := GetJSONString(AJSONObj, 'productid');
+  TempGitRepo    := GetJSONString(AJSONObj, 'gitrepo');
+  TempGitAcc     := GetJSONString(AJSONObj, 'gitaccount');
+  installtype    := GetJSONString(AJSONObj, 'type');
+  TempGitTok     := GetJSONString(AJSONObj,'gittoken');
+  ARMSessionIdFromRedis := GetJSONString(AJSONObj, 'ARMSessionId');
+  IsSessionIdFromPayload := Trim(ARMSessionIdFromRedis) <> '';
 
   bTrace := SameText(Trim(ATrace), 'true') or
           SameText(Trim(ATrace), '1') or

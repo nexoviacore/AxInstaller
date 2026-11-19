@@ -5,7 +5,7 @@ interface
 uses
   System.SysUtils, Dialogs, System.IOUtils, windows, System.Classes, uUtils,
   uDBManager,
-  Data.DBXJSON, XMLDoc, XMLIntf, uAxLog, uDbConnect,uAppIO;
+  Data.DBXJSON, XMLDoc, XMLIntf, uAxLog, uDbConnect,uAppIO,uRedisConnection;
 
 type
   TConfig = class
@@ -484,6 +484,7 @@ var
   EncrptPass: string;
   FilePath, JSONText: string;
   JSONObject: TJSONObject;
+  RedisConnection: TRedisConnection;
 begin
   try
     writelog('readReleasePasswordandGitUrl function started..');
@@ -590,6 +591,68 @@ end
 else
 begin
   WriteLog('Temporary Git account or repository not provided. Keeping default Git URL.');
+end;
+
+  ///redis
+  if IsSessionIdFromPayload then
+  begin
+//  JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+//
+//  JSONObject := TJSONObject.ParseJSONValue(
+//    JSONObject.Get('appsettings').JsonValue.Value
+//  ) as TJSONObject;
+//
+//  JSONObject := TJSONObject.ParseJSONValue(
+//    JSONObject.Get(projectname).JsonValue.Value
+//  ) as TJSONObject;
+//
+//  JSONObject := TJSONObject.ParseJSONValue(
+//    JSONObject.Get('Redis').JsonValue.Value) as TJSONObject;
+//
+//  ProjectRedisDetails := JSONObject;
+     WriteLog('Session ID found in payload. Retrieving Redis details.');
+
+  if Assigned(JSONObject.Get('appsettingsinipath')) then
+    AppSettingsIniPath := Trim(
+      JSONObject.Get('appsettingsinipath').JsonValue.Value)
+  else
+    AppSettingsIniPath := '';
+
+  WriteLog('AppSettings.ini path: ' + AppSettingsIniPath);
+
+  if AppSettingsIniPath = '' then
+  begin
+    WriteLog('AppSettings.ini path is missing in the appsettings.config file.');
+    raise Exception.Create(
+      'AppSettings.ini path is missing in the appsettings.config file.'
+    );
+  end;
+
+  WriteLog('Retrieving Redis configuration for project: ' + projectname);
+
+  RedisConnection := TRedisConnection.Create;
+  try
+    try
+      RedisConnection.GetRedisDetailsFromAppSettingsIni(
+        AppSettingsIniPath,
+        projectname,
+        ProjectRedisDetails
+      );
+
+      WriteLog('Redis details retrieved successfully.');
+
+    except
+      on E: Exception do
+      begin
+        WriteLog(
+          'Error while retrieving Redis details: ' + E.Message
+        );
+        raise;
+      end;
+    end;
+  finally
+    RedisConnection.Free;
+  end;
 end;
 {$ENDIF};
 
@@ -930,6 +993,22 @@ begin
 
         DecrAccessToken := prjObject.Get('Access_Token').JsonValue.Value;
         Access_Token := dbm.gf.DecryptFldValue(DecrAccessToken, 't');
+
+
+    //Temporary token change as request came from axi command line(16-11-26) url and repo change
+    //will occur in  readreleasePasswordandGitUrl function.
+    {$IFNDEF CONSOLE_APP}
+    if (TempGitRepo <> '') and (TempGitAcc <> '') and (TempGitTok <> '') and (installtype <> '') then
+      begin
+        WriteLog('TempGitToken: ' + TempGitTok);
+
+        WriteLog('Original GitToken: ' + Access_Token);
+
+        Access_Token := TempGitTok;
+
+        WriteLog('Updated GitToken: ' + Access_Token);
+      end
+    {$ENDIF};
 
       end;
       // if bUpdateConfig then

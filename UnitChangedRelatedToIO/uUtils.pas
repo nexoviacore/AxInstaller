@@ -11,7 +11,7 @@ uses
 var
   userresp: string;
   gitm: TGitManager;
-  projectname, tempDBConnectionName, MultiProjConnNames, AxIns_Username,AxIns_ProductID : string;
+  projectname, tempDBConnectionName, MultiProjConnNames, AxIns_Username,AxIns_ProductVersionID : string;
   scriptpath, AppDir: string;
   Access_Token: string;
   Owner: string;
@@ -33,7 +33,7 @@ var
   selectedPlugin, selectedversion, selectedpatch, selectedSchema: string;
   pluginLocalPath, patchLocalPath, patchtobeinstall, currentpatchname,
     currentversionname: string;
-  gitProducturl, ProductLocalPath, selectedProduct,requestedVersion,VersionTakenFromVersionInfo,
+  gitProductVersionurl, ProductVersionLocalPath, selectedProductVersion,requestedVersion,VersionTakenFromVersionInfo,
   installtype,selectedCR,gitChangeRequesturl,ChangeRequestLocalPath,TempGitAcc,TempGitRepo,TempGitTok:string;
   IsVersionInstall: boolean = False;
   armsigninurl, armaxputurl, armbaseurl: string;
@@ -69,14 +69,14 @@ var
   IsConfigReload: boolean;
   SkipFileList: TStringlist;
   Installer_ErrList: TStringlist;
-  HasDefSchema, IsProductInstall,IsCRInstall, bGitPullIncomplete : boolean;
+  HasDefSchema, IsProductVersionInstall,IsCRInstall, bGitPullIncomplete : boolean;
 
   //PayloadCommand: String;
 
   gResponse,InstallErrMsg,LogFileName : string;
 
 const
-  cProducts = 'AxpertProducts';
+  cProductVersions = 'AxpertProductVersions';
   cChangeRequests = 'AxpertChangeRequests';
   // plugin structure
   cPlugins = 'AxpertPlugins';
@@ -94,8 +94,8 @@ const
   cPluginScript = 'PluginScripts';
   cPluginAPI = 'AxPlugins';
   cCustomPages = 'CustomPages';
-  cProductAPI = 'AxProducts';
-  cProductScript = 'ProductScripts';
+  cProductVersionAPI = 'AxProductVersions';
+  cProductVersionScript = 'ProductVersioncripts';
   cChangeRequestAPI = 'AxChangeRequests';
   cChangeRequestScript = 'ChangeRequestScripts';
 
@@ -679,15 +679,15 @@ begin
     '"message":"' + StringReplace(InstallErrMsg, '"', '\"', [rfReplaceAll]) + '"' +
     '}';
   {$IFNDEF CONSOLE_APP}
-    if IsProductInstall then
+    if IsProductVersionInstall then
 //      PushInstallUpdateToRedis('','','Installation Failed. '+InstallErrMsg);
-       PushInstallUpdateToRedis('','','FAILED');
+       //PushInstallUpdateToRedis('','','FAILED');
   {$ENDIF};
 end
 else
 begin
    sMessage := 'Command Executed Successfully';
-//   if IsProductInstall or IsCRInstall then
+//   if IsProductVersionInstall or IsCRInstall then
 //    begin
 //    sMessage := 'Command Executed Successfully';
 //    end
@@ -704,17 +704,17 @@ begin
     '"message":"' + StringReplace(sMessage, '"', '\"', [rfReplaceAll]) + '"' +
     '}';
   {$IFNDEF CONSOLE_APP}
-   if IsProductInstall then
-     PushInstallUpdateToRedis('','','INSTALLED');
+   if IsProductVersionInstall then
+   //  PushInstallUpdateToRedis('','','INSTALLED');
    if IsCRInstall then
-     PushInstallUpdateToRedis('','','INSTALLED');
+     //PushInstallUpdateToRedis('','','INSTALLED');
   {$ENDIF};
 end;
 {$IFNDEF CONSOLE_APP}
-   if patchOrPlugin = 'Product' then
-     FinalizeInstallUpdatesToRedis;
+   if patchOrPlugin = 'ProductVersion' then
+    // FinalizeInstallUpdatesToRedis;
    if patchOrPlugin = 'ChangeRequest' then
-     FinalizeInstallUpdatesToRedis;
+     //FinalizeInstallUpdatesToRedis;
 {$ENDIF};
 end;
 

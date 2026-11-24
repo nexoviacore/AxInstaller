@@ -151,25 +151,25 @@ begin
 
       inst := Tinstallation.Create;
       // Writeln('Connected to db.');
-      if (patchorPlugin = 'Plugin') or (patchorPlugin = 'Product') or (patchorPlugin ='ChangeRequest') then
+      if (patchorPlugin = 'Plugin') or (patchorPlugin = 'ProductVersion') or (patchorPlugin ='ChangeRequest') then
       begin
         {$IFDEF CONSOLE_APP}
           dbm.gf.username := 'admin';
         {$ENDIF}
         {$IFNDEF CONSOLE_APP}
-          if IsProductInstall then
+          if IsProductVersionInstall then
           begin
-            PushInstallUpdateToRedis('','','INSTALLING');
+            //PushInstallUpdateToRedis('','','INSTALLING');
           end;
         {$ENDIF};
         inst.InstallAxpertStructures();    //Installs only structure
         //inst.InstallAxpertStructureFiles(); //used patch installation functionality
         inst.ExecuteDBScripts();  //Executes SQL scripts
 //        {$IFNDEF CONSOLE_APP}
-//          if IsProductInstall then
+//          if IsProductVersionInstall then
 //            PushInstallUpdateToRedis('','','File extraction completed');
 //        {$ENDIF};
-        inst.InstallAxiData();  //Installs Axpert data (.axidata // mainly introduced for Products)
+        inst.InstallAxiData();  //Installs Axpert data (.axidata // mainly introduced for ProductVersion)
         //This can be enabled when required
        // inst.InstallRMQClient();
 
@@ -182,7 +182,7 @@ begin
         end;
 
 //        {$IFNDEF CONSOLE_APP}
-//          if patchOrPlugin = 'Product' then
+//          if patchOrPlugin = 'ProductVersion' then
 //            PushInstallUpdateToRedis('','','Installation completed');
 //        {$ENDIF};
         // inst.IsPublicInfoFound();//pluginUpdate();

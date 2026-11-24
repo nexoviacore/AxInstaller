@@ -42,15 +42,15 @@ type
     function InstallPluginScripts(): string;
     // function InstallAxpertStructureFiles(Sourcepath: string; isRuntime: Boolean = False): String;
 
-    function InstallProduct(Product: string): string;
-    function ProductInstallWebFiles(webfilepath: string;
+    function InstallProductVersion(ProductVersion: string): string;
+    function ProductVersionInstallWebFiles(webfilepath: string;
       dstPath: string): string;
-    function ProductFindFile(Sourcepath, destpath: string): string;
-    // function ProductInstallAxpertStructures(): string;
+    function ProductVersionFindFile(Sourcepath, destpath: string): string;
+    // function ProductVersionInstallAxpertStructures(): string;
     function InstallAxiData: string;
 
-    function GetStoredVersionFromDB(const ProductOrCRName: string): string;
-    procedure StoreLatestVersionToDb(const ProductOrCRName: string; const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+    function GetStoredVersionFromDB(const ProductVersionOrCRName: string): string;
+    procedure StoreLatestVersionToDb(const ProductVersionOrCRName: string; const ProductVersionOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
 
   end;
 
@@ -154,6 +154,13 @@ begin
         begin
           for Z := 0 to foldercount - 1 do
           begin
+            // Skip PluginScripts and Structures folders --need to be optimized
+            if SameText((ExtractFileName(folderArray[Z])),cPluginScript) or
+               SameText((ExtractFileName(folderArray[Z])),cAxpertStructures) then
+            begin
+              writelog('Skipping ' + FolderName+ ' folder from placing in web path');
+              Continue;
+            end;
             // Handle CustomPages
             if SameText(ExtractFileName(folderArray[Z]), cCustomPages) then
             begin
@@ -220,6 +227,13 @@ begin
               end *)
       for I := 0 to foldercount - 1 do
       begin
+        // Skip PluginScripts and Structures folders --need to be optimized
+            if SameText((ExtractFileName(folderArray[I])),cPluginScript) or
+               SameText((ExtractFileName(folderArray[I])),cAxpertStructures) then
+            begin
+              writelog('Skipping ' + FolderName+ ' folder from placing in web path');
+              Continue;
+            end;
         // Handle CustomPages
         if SameText(ExtractFileName(folderArray[I]), cCustomPages) then
         begin
@@ -528,8 +542,8 @@ begin
     if patchOrPlugin = 'Plugin' then
       AxStruPath := { patchLocalPath } pluginLocalPath + selectedPlugin + '\' +
         cAxpertStructures + '\' + databasetype + '\'
-    else if patchOrPlugin = 'Product' then
-      AxStruPath := { patchLocalPath } ProductLocalPath + selectedProduct + '\' +requestedVersion+ '\'
+    else if patchOrPlugin = 'ProductVersion' then
+      AxStruPath := { patchLocalPath } ProductVersionLocalPath + selectedProductVersion + '\' +requestedVersion+ '\'
         + cAxpertStructures + '\' + databasetype + '\'
     else if patchOrPlugin = 'ChangeRequest' then
       AxStruPath := { patchLocalPath } ChangeRequestLocalPath + selectedCR + '\' +requestedVersion+ '\'
@@ -664,8 +678,8 @@ begin
     if patchOrPlugin = 'Plugin' then
       AxStruPath := { patchLocalPath } pluginLocalPath + selectedPlugin + '\' +
         cAxpertStructures + '\' + databasetype + '\'
-    else if patchOrPlugin = 'Product' then
-      AxStruPath := { patchLocalPath } ProductLocalPath + selectedProduct +'\'+requestedVersion+ '\'
+    else if patchOrPlugin = 'ProductVersion' then
+      AxStruPath := { patchLocalPath } ProductVersionLocalPath + selectedProductVersion +'\'+requestedVersion+ '\'
         + cAxpertStructures + '\' + databasetype + '\'
     else if patchOrPlugin = 'ChangeRequest' then
       AxStruPath := { patchLocalPath } ChangeRequestLocalPath + selectedCR + '\' +requestedVersion+ '\'
@@ -1360,24 +1374,24 @@ begin
 
 end;
 
-function TInstallation.InstallProduct(Product: string): string;
+function TInstallation.InstallProductVersion(ProductVersion: string): string;
 var
   dpath: string;
 begin
   AppWriteln;
-  Console_write('2. Starting Product Installation:', 3);
+  Console_write('2. Starting ProductVersion Installation:', 3);
   AppWriteln;
   dpath := runwebcodepath;
-  if  patchOrPlugin = 'Product' then
-    ProductInstallWebFiles(ProductLocalPath + selectedProduct + '\' +requestedVersion , dpath)
+  if  patchOrPlugin = 'ProductVersion' then
+    ProductVersionInstallWebFiles(ProductVersionLocalPath + selectedProductVersion + '\' +requestedVersion , dpath)
   else if  patchOrPlugin = 'ChangeRequest' then
-    ProductInstallWebFiles(ChangeRequestLocalPath + selectedCR + '\' +requestedVersion , dpath)
+    ProductVersionInstallWebFiles(ChangeRequestLocalPath + selectedCR + '\' +requestedVersion , dpath)
   else
-   ProductInstallWebFiles(ProductLocalPath + selectedProduct, dpath);
+   ProductVersionInstallWebFiles(ProductVersionLocalPath + selectedProductVersion, dpath);
   AppWriteln;
 end;
 
-function TInstallation.ProductInstallWebFiles(webfilepath: string;
+function TInstallation.ProductVersionInstallWebFiles(webfilepath: string;
   dstPath: string): string;
 var
   webpath: string;
@@ -1389,22 +1403,22 @@ begin
   Console_write('  - Installing Plugin: ' + selectedPlugin, 5);
   AppWriteln;
   Console_write
-    ('   - Copying files to corresponding Product folders from the GIT download directory.',
+    ('   - Copying files to corresponding ProductVersion folders from the GIT download directory.',
     10);
   AppWriteln;
   AppWriteln;
 
-  // destinationPath := runwebcodepath + '\' + cProducts + '\' + selectedProduct;
+  // destinationPath := runwebcodepath + '\' + cProducts + '\' + selectedProductVersion;
   destinationPath := runwebcodepath;
   destinationPath := TRegEx.Replace(destinationPath, '\\+', '\');
   ForceDirectories(destinationPath);
   destinationPath := IncludeTrailingBackslash(destinationPath);
 
-  ProductFindFile(webpath, destinationPath);
+  ProductVersionFindFile(webpath, destinationPath);
 
 end;
 
-function TInstallation.ProductFindFile(Sourcepath, destpath: string): string;
+function TInstallation.ProductVersionFindFile(Sourcepath, destpath: string): string;
 var
   fileArray: TArray<string>;
   folderArray: TArray<string>;
@@ -1415,7 +1429,7 @@ var
 begin
   try
     /// Need to verify and handle if anyother folders are included////
-    writelog('ProductFindFile function starts...');
+    writelog('ProductVersionFindFile function starts...');
     fileArray := TArray<string>(TDirectory.GetFiles(Sourcepath));
     filecount := Length(fileArray);
 
@@ -1455,7 +1469,7 @@ begin
 
                 fulldestpath := destpath + projectname + '\HTMLPages';
                 ForceDirectories(fulldestpath);
-                ProductFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
+                ProductVersionFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
               end;
 
               // js
@@ -1463,7 +1477,7 @@ begin
               begin
                 fulldestpath := destpath + projectname + '\HTMLPages' + '\js';
                 ForceDirectories(fulldestpath);
-                ProductFindFile(fullsourcepath + 'HTMLPages\js', fulldestpath);
+                ProductVersionFindFile(fullsourcepath + 'HTMLPages\js', fulldestpath);
               end;
 
               // css
@@ -1471,19 +1485,19 @@ begin
               begin
                 fulldestpath := destpath + projectname + '\HTMLPages' + '\css';
                 ForceDirectories(fulldestpath);
-                ProductFindFile(fullsourcepath + 'HTMLPages\css', fulldestpath);
+                ProductVersionFindFile(fullsourcepath + 'HTMLPages\css', fulldestpath);
               end;
             end
             else
             begin
-              // Currently, only CustomPages are copied to the AxpertWeb folder during Product installation.
-              // Other folders such as Structures, Scripts, and ProductScripts remain in the local download
+              // Currently, only CustomPages are copied to the AxpertWeb folder during ProductVersion installation.
+              // Other folders such as Structures, Scripts, and ProductVersionScripts remain in the local download
               // folder and are processed directly from there as required.
               //   - Structures are imported from the local download path.
               //   - Scripts are executed from the local download path.
-              //   - ProductScripts are copied from the local download path to the ArmScripts folder.
+              //   - ProductVersionScripts are copied from the local download path to the ArmScripts folder.
               // Any changes to this handling can be considered in future enhancements.
-              // For now, only CustomPages are copied to the AxpertWeb folder as part of Product installation.
+              // For now, only CustomPages are copied to the AxpertWeb folder as part of ProductVersion installation.
 
               continue;
               (*
@@ -1495,7 +1509,7 @@ begin
               fulldestpath := destpath + '\' + ExtractFileName(folderArray[Z]);
               writelog('Sourcepath : ' + fullsourcepath);
               writelog('Destinationpath : ' + fulldestpath);
-              ProductFindFile(fullsourcepath, fulldestpath); *)
+              ProductVersionFindFile(fullsourcepath, fulldestpath); *)
             end;
           end;
         end;
@@ -1521,7 +1535,7 @@ begin
 
             fulldestpath := destpath + projectname + '\HTMLPages';
             ForceDirectories(fulldestpath);
-            ProductFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
+            ProductVersionFindFile(fullsourcepath + 'HTMLPages', fulldestpath);
           end;
 
           // js
@@ -1529,7 +1543,7 @@ begin
           begin
             fulldestpath := destpath + projectname + '\HTMLPages' + '\js';
             ForceDirectories(fulldestpath);
-            ProductFindFile(fullsourcepath + 'HTMLPages\js', fulldestpath);
+            ProductVersionFindFile(fullsourcepath + 'HTMLPages\js', fulldestpath);
           end;
 
           // css
@@ -1537,27 +1551,27 @@ begin
           begin
             fulldestpath := destpath + projectname + '\HTMLPages' + '\css';
             ForceDirectories(fulldestpath);
-            ProductFindFile(fullsourcepath + 'HTMLPages\css', fulldestpath);
+            ProductVersionFindFile(fullsourcepath + 'HTMLPages\css', fulldestpath);
           end;
         end
         else if SameText(ExtractFileName(folderArray[I]), cAxpertStructures) then
         begin
           // Structures are consumed by InstallAxpertStructures from the
-          // Product-local source tree. Do not copy them as web files.
-          WriteLog('Skipping Product Structures in ProductInstallWebFiles: ' +
+          // ProductVersion-local source tree. Do not copy them as web files.
+          WriteLog('Skipping ProductVersion Structures in ProductVersionInstallWebFiles: ' +
             folderArray[I]);
           Continue;
         end
         else
         begin
-          // Currently, only CustomPages are copied to the AxpertWeb folder during Product installation.
-          // Other folders such as Structures, Scripts, and ProductScripts remain in the local download
+          // Currently, only CustomPages are copied to the AxpertWeb folder during ProductVersion installation.
+          // Other folders such as Structures, Scripts, and ProductVersionScripts remain in the local download
           // folder and are processed directly from there as required.
           //   - Structures are imported from the local download path.
           //   - Scripts are executed from the local download path.
-          //   - ProductScripts are copied from the local download path to the ArmScripts folder.
+          //   - ProductVersionScripts are copied from the local download path to the ArmScripts folder.
           // Any changes to this handling can be considered in future enhancements.
-          // For now, only CustomPages are copied to the AxpertWeb folder as part of Product installation.
+          // For now, only CustomPages are copied to the AxpertWeb folder as part of ProductVersion installation.
 
           continue;
           (*
@@ -1572,7 +1586,7 @@ begin
             ExtractFileName(folderArray[I]), '\\+', '\');
           writelog('Sourcepath : ' + fullsourcepath);
           writelog('Destinationpath : ' + fulldestpath);
-          ProductFindFile(fullsourcepath, fulldestpath); *)
+          ProductVersionFindFile(fullsourcepath, fulldestpath); *)
         end;
       end;
     end;
@@ -1581,14 +1595,14 @@ begin
     begin
       ReadErrorList(E.Message);
       Console_write('Error: ' + E.Message, 12);
-      writelog('Error in ProductFindFile function while processing ' +
+      writelog('Error in ProductVersionFindFile function while processing ' +
         ExtractFileName(Sourcepath) + ' file');
       writelog('Error : ' + E.Message);
       AppWriteln;
       AppReadln;
     end;
   end;
-  writelog('ProductFindFile function ends...');
+  writelog('ProductVersionFindFile function ends...');
 end;
 
 
@@ -1793,7 +1807,7 @@ end;
   end; *)
 
 function TInstallation.GetStoredVersionFromDB(
-  const ProductOrCRName: string): string;
+  const ProductVersionOrCRName: string): string;
 var
   pkgXDS: TXDS;
 begin
@@ -1801,7 +1815,7 @@ begin
   pkgXDS := nil;
 
   WriteLog('GetStoredVersionFromDB - Start');
-  WriteLog('Name : ' + ProductOrCRName);
+  WriteLog('Name : ' + ProductVersionOrCRName);
 
   try
     try
@@ -1819,9 +1833,9 @@ begin
 
       WriteLog('XDS Buffered mode enabled');
 
-//      if selectedProduct <> '' then
+//      if selectedProductVersion <> '' then
 //       pkgXDS.CDS.CommandText :=
-//        'SELECT product_version ' +
+//        'SELECT ProductVersion_version ' +
 //        'FROM axi_installed_products ' +
 //        'WHERE product_name = :product_name ' +
 //        'AND installation_status = ''Installed'' ' +
@@ -1837,7 +1851,7 @@ begin
 //        'ORDER BY installed_on DESC ' +
 //        'LIMIT 1';
 
-       if selectedProduct <> '' then
+       if selectedProductVersion <> '' then
         pkgXDS.CDS.CommandText :=
           'SELECT product_version ' +
           'FROM axi_installed_products ' +
@@ -1859,9 +1873,9 @@ begin
 
       WriteLog('Latest version query prepared');
 
-      pkgXDS.CDS.Params.ParamValues['product_name'] := ProductOrCRName;
+      pkgXDS.CDS.Params.ParamValues['product_name'] := ProductVersionOrCRName;
 
-      WriteLog('Product name parameter assigned');
+      WriteLog('ProductVersion name parameter assigned');
       WriteLog('Executing latest version query');
 
       pkgXDS.Open;
@@ -1877,7 +1891,7 @@ begin
       else
       begin
         WriteLog(
-          'No installed version found : ' + ProductOrCRName);
+          'No installed version found : ' + ProductVersionOrCRName);
       end;
 
       pkgXDS.Close;
@@ -1889,7 +1903,7 @@ begin
       on E: Exception do
       begin
         WriteLog('GetStoredVersionFromDB - FAILED');
-        WriteLog('Name : ' + ProductOrCRName);
+        WriteLog('Name : ' + ProductVersionOrCRName);
         WriteLog('Exception Class : ' + E.ClassName);
         WriteLog('Error : ' + E.Message);
 
@@ -1914,20 +1928,20 @@ begin
 end;
 
 procedure TInstallation.StoreLatestVersionToDb(
-  const ProductOrCRName: string;
-  const ProductOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
+  const ProductVersionOrCRName: string;
+  const ProductVersionOrCRVersion,ResultOfInstallation,ResultOfInstallMsg: string);
 var
   pkgXDS: TXDS;
 begin
   pkgXDS := nil;
 
   WriteLog('StoreLatestVersionToDb - Start');
-  WriteLog('Name : ' + ProductOrCRName);
-  WriteLog('Version : ' + ProductOrCRVersion);
+  WriteLog('Name : ' + ProductVersionOrCRName);
+  WriteLog('Version : ' + ProductVersionOrCRVersion);
 
   try
     try
-      WriteLog('Creating XDS object for storing Product version');
+      WriteLog('Creating XDS object for storing ProductVersion version');
 
       if not Assigned(dbm) then
       begin
@@ -1943,7 +1957,7 @@ begin
 
       if not Assigned(pkgXDS) then
         raise Exception.Create(
-          'Unable to create XDS object for storing Product version.');
+          'Unable to create XDS object for storing ProductVersion version.');
 
       WriteLog('XDS object created successfully');
 
@@ -1956,14 +1970,14 @@ begin
       WriteLog('Submitting id');
       pkgXDS.Submit('id',floattostr(dbm.Gen_id(dbm.connection)), 'n');
 
-      WriteLog('Submitting product_id : '+AxIns_ProductID);
-      pkgXDS.Submit('product_id',AxIns_ProductID, 'c');
+      WriteLog('Submitting product_id : '+AxIns_ProductVersionID);
+      pkgXDS.Submit('product_id',AxIns_ProductVersionID, 'c');
 
-      WriteLog('Submitting product_name : ' + ProductOrCRName);
-      pkgXDS.Submit('product_name', ProductOrCRName, 'c');
+      WriteLog('Submitting product_name : ' + ProductVersionOrCRName);
+      pkgXDS.Submit('product_name', ProductVersionOrCRName, 'c');
 
-      WriteLog('Submitting product_version : ' + ProductOrCRVersion);
-      pkgXDS.Submit('product_version', ProductOrCRVersion, 'c');
+      WriteLog('Submitting product_version : ' + ProductVersionOrCRVersion);
+      pkgXDS.Submit('product_version', ProductVersionOrCRVersion, 'c');
 
       WriteLog('Submitting product_type : ' +installtype);
       pkgXDS.Submit('product_type',installtype, 'c');
@@ -1971,10 +1985,10 @@ begin
       WriteLog('Submitting repository_name');
       pkgXDS.Submit('repository_name', '', 'c');
 
-      if selectedProduct <>  '' then
+      if selectedProductVersion <>  '' then
       begin
-      WriteLog('Submitting repository_url : '+gitProducturl + selectedProduct+ '/' + requestedVersion);
-      pkgXDS.Submit('repository_url',gitProducturl, 'c');
+      WriteLog('Submitting repository_url : '+gitProductVersionurl + selectedProductVersion+ '/' + requestedVersion);
+      pkgXDS.Submit('repository_url',gitProductVersionurl, 'c');
       end;
 
       if selectedCR <>  '' then
@@ -2006,8 +2020,8 @@ begin
       on E: Exception do
       begin
         WriteLog('StoreLatestVersionToDb - FAILED');
-        WriteLog('Name : ' + ProductOrCRName);
-        WriteLog('Version : ' + ProductOrCRVersion);
+        WriteLog('Name : ' + ProductVersionOrCRName);
+        WriteLog('Version : ' + ProductVersionOrCRVersion);
         WriteLog('Exception Class : ' + E.ClassName);
         WriteLog('Error : ' + E.Message);
 

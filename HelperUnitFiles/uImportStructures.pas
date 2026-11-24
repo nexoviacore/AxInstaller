@@ -294,7 +294,7 @@ begin
         FileContent.LoadFromFile(FileName);
         Result := FileContent.Text;
 
-        // Decrypt Data Product (.axidata) files
+        // Decrypt Data ProductVersion (.axidata) files
         if SameText(ExtractFileExt(FileName), '.axidata') then
         begin
           writelog('Decrypting axidata file : ' + ExtractFileName(FileName));
@@ -846,7 +846,7 @@ begin
 
     try
       // 12-11-2026: Disabled skipping of already-installed structures
-      // to allow reinstallation during Product/CR installation.
+      // to allow reinstallation during ProductVersion/CR installation.
       //sf.bSkipExistingStructureImport := True;
       sf.bSkipExistingStructureImport := False;;
       sf.WriteTStructDef(FileName, sXML);
@@ -1398,7 +1398,7 @@ begin
   writelog('BuildAxPutRequest function started...');
 
   try
-    writelog('Parsing AxiData Product JSON.');
+    writelog('Parsing AxiData ProductVersion JSON.');
 
     AxPutJsonRequest := NormalizeJsonString(AxDataJson);
     // Need to check this   | handling \" and \
@@ -1411,7 +1411,7 @@ begin
     RootObj := TJSONObject.ParseJSONValue(AxPutJsonRequest) as TJSONObject;
 
     if RootObj = nil then
-      raise Exception.Create('Invalid AxiData Product JSON.');
+      raise Exception.Create('Invalid AxiData ProductVersion JSON.');
 
     writelog('AxiData JSON parsed successfully.');
 
@@ -1527,7 +1527,7 @@ begin
 
     if RootObj = nil then
       raise Exception.Create(
-        'Invalid AxiData Product JSON.'
+        'Invalid AxiData ProductVersion JSON.'
       );
 
     writelog(
@@ -1778,7 +1778,7 @@ begin
       ExtractFileName(ADataJsonFile);
 
     writelog(
-      'Processing AxiData Product: ' +
+      'Processing AxiData ProductVersion: ' +
       FileName
     );
 
@@ -1796,14 +1796,14 @@ begin
     {------------------------------------------------------}
 
     writelog(
-      'Reading AxiData Product.'
+      'Reading AxiData ProductVersion.'
     );
 
     AxDataJson :=
       ReadFile(ADataJsonFile);
 
     writelog(
-      'AxiData Product loaded successfully. Size: ' +
+      'AxiData ProductVersion loaded successfully. Size: ' +
       IntToStr(Length(AxDataJson)) +
       ' bytes.'
     );
@@ -1966,7 +1966,7 @@ begin
     {------------------------------------------------------}
 
     writelog(
-      'Submitting Product to AxPut API.'
+      'Submitting ProductVersion to AxPut API.'
     );
 
     DoAxPut(
@@ -1977,7 +1977,7 @@ begin
     );
 
     writelog(
-      'Product imported successfully.'
+      'ProductVersion imported successfully.'
     );
 
     Result := True;
@@ -2056,13 +2056,13 @@ begin
   writelog('InstallDataJson function started.');
   try
     FileName := ExtractFileName(ADataJsonFile);
-    writelog('Processing AxiData Product : ' + FileName);
+    writelog('Processing AxiData ProductVersion : ' + FileName);
     Console_write('   - Processing AxiData Json File ' + FileName + '.', 10);
     Appwriteln;
 
-    writelog('Reading AxiData Product.');
+    writelog('Reading AxiData ProductVersion.');
     AxPutRequest := ReadFile(ADataJsonFile);
-    writelog('AxiData Product loaded successfully.');
+    writelog('AxiData ProductVersion loaded successfully.');
 
     // hardcoded for now, need to enhance to be read from appsettings
     // SignInURL := 'https://agileqa.agilecloud.biz/armnew/api/v1/Signin';
@@ -2107,9 +2107,9 @@ begin
         AxPutPayloadObj.Free;
       end;
 
-      writelog('Submitting Product to AxPut API.');
+      writelog('Submitting ProductVersion to AxPut API.');
       DoAxPut(ArmAxPutUrl, AxPutRequest, ARMSessionId, Token);
-      writelog('Product imported successfully.');
+      writelog('ProductVersion imported successfully.');
       Result := True;
 
       Console_write('   - AxiData Json File ' + FileName +' imported successfully.', 10);

@@ -94,14 +94,14 @@ begin
         cPluginScript + '\';
   end
  //Need to verify & optimize accordingly
-  else if patchOrPlugin = 'Product' then
+  else if patchOrPlugin = 'ProductVersion' then
   begin
-    writelog('Copying files to corresponding Product Script folder from the local plugin directory.');
-    pluginpath := armapipath + '\' + cProductAPI + '\';
+    writelog('Copying files to corresponding ProductVersion Script folder from the local plugin directory.');
+    pluginpath := armapipath + '\' + cProductVersionAPI + '\';
     pluginpath := stringReplace(pluginpath, '\\', '\', [rfReplaceAll]);
     destinationpath := pluginpath;
     Appwriteln;
-    LoacalDir := ProductLocalPath + selectedProduct + '\' +requestedVersion + '\' + cPluginScript + '\';
+    LoacalDir := ProductVersionLocalPath + selectedProductVersion + '\' +requestedVersion + '\' + cPluginScript + '\';
   end
   else if patchOrPlugin = 'ChangeRequest' then
   begin

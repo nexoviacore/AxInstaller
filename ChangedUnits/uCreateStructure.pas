@@ -1896,8 +1896,8 @@ begin
     {$IFNDEF ForService}
       AssignFile(f1,ExtractFilePath(application.ExeName)+'import.txt');
     {$ELSE}
-      AssignFile(f1,Axp.dbm.gf.exepath+'\import.txt');
-      WriteInToLog(Axp.dbm.gf.exepath+'\import.txt');
+      AssignFile(f1,Axp.dbm.gf.exepath+'\import_'+axp.dbm.gf.sessionid+'.txt');
+      WriteInToLog(Axp.dbm.gf.exepath+'\import_'+axp.dbm.gf.sessionid+'.txt');
     {$ENDIF}
     rewrite(f1);
     WriteInToLog('1');

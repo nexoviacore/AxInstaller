@@ -80,7 +80,7 @@ uses
   uWorkFlowRuntime in '\\192.168.2.6\Axpert9-XE3\Ver 11.1\uWorkFlowRuntime.pas',
   uLicMgr in '\\192.168.2.6\Axpert9-XE3\Ver 11.0\uLicMgr.pas',
   UProfitEVal in '\\192.168.2.6\Axpert9-XE3\Ver 11.2\UProfitEVal.pas',
-  uIViewTables in '\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uIViewTables.pas',
+  uIViewTables in 'ChangedUnits\uIViewTables.pas',
   uExecuteSQL in '\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uExecuteSQL.pas',
   uCreateIviewStructure in '\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uCreateIviewStructure.pas',
   UParse in '\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\UParse.pas',
@@ -91,10 +91,10 @@ uses
   uAPILoggingImpl in 'ChangedUnits\uAPILoggingImpl.pas',
   uAxProvider in '\\192.168.2.6\Axpert9-XE3\Ver 11.2\uAxProvider.pas',
   uDoDebug in '\\192.168.2.6\Axpert9-XE3\Ver 11.1\uDoDebug.pas',
-  uGeneralFunctions in '\\192.168.2.6\Axpert9-XE3\Ver 11.2\uGeneralFunctions.pas',
+  uGeneralFunctions in 'Serverfile\uGeneralFunctions.pas',
   uProvidelink in '\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uProvidelink.pas',
   uProfitQuery in '\\192.168.2.6\Axpert9-XE3\Ver 10.9\WebFix4\uProfitQuery.pas',
-  uStructInTable in '\\192.168.2.6\Axpert9-XE3\Ver 11.1\uStructInTable.pas',
+  uStructInTable in 'ChangedUnits\uStructInTable.pas',
   uiViewXML in '\\192.168.2.6\Axpert9-XE3\Ver 11.0\uiViewXML.pas',
   uImportStructDef in '\\192.168.2.6\Axpert9-XE3\Ver 11.1\uImportStructDef.pas',
   uAxPEG in '\\192.168.2.6\Axpert9-XE3\Ver 11.2\ASBPegRest_XE8\uAxPEG.pas',
@@ -127,8 +127,8 @@ uses
   uConnect in '\\192.168.2.6\Axpert9-XE3\Ver 11.4\CommonObjs\uConnect.pas',
   uDBManager in '\\192.168.2.6\Axpert9-XE3\Ver 11.4\CommonObjs\uDBManager.pas',
   uInstallUpdatesToRedis in 'UnitChangedRelatedToIO\uInstallUpdatesToRedis.pas',
-  uCreateStructure in 'ChangedUnits\uCreateStructure.pas',
-  uRedisConnection in 'UnitChangedRelatedToIO\uRedisConnection.pas';
+  uCreateStructure in 'ChangedUnits\uCreateStructure.pas' {------------------------------------------------------------------},
+  uRedisConnection in 'UnitChangedRelatedToIO\uRedisConnection.pas' {------------------------------------------------------------------};
 
 { ------------------------------------------------------------------ }
 { ISAPI entry points - exported for IIS                               }

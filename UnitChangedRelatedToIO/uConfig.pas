@@ -520,10 +520,10 @@ begin
     else
       GitPluginUrl := '';
 
-    if assigned(JSONObject.Get('gitproducturl')) then
-      GitProductUrl := Trim(JSONObject.Get('gitproducturl').JsonValue.Value)
+    if assigned(JSONObject.Get('gitproductversionurl')) then
+      GitProductVersionUrl := Trim(JSONObject.Get('gitproductversionurl').JsonValue.Value)
     else
-      GitProductUrl := '';
+      GitProductVersionUrl := '';
 
     if assigned(JSONObject.Get('gitchangerequesturl')) then
       gitChangeRequesturl := Trim(JSONObject.Get('gitchangerequesturl').JsonValue.Value)
@@ -548,7 +548,7 @@ begin
     SetPatchLocalPath;
     writelog('Git Url : ' + GitPatchURL);
     writelog('Git Plugin Url : ' + GitPluginUrl);
-    writelog('Git Product Url : ' + GitProductUrl);
+    writelog('Git ProductVersion Url : ' + GitProductVersionUrl);
     writelog('Git Change Request Url : ' + gitchangerequesturl);
     writelog('ARM Base Url : ' + ArmBaseUrl);
     writelog('Got password in decrypted format');
@@ -569,14 +569,14 @@ begin
 
     WriteLog('Updated GitPluginURL: ' + GitPluginURL);
   end
-  else if lowercase(installtype) = 'product' then
+  else if lowercase(installtype) = 'productversion' then
   begin
-    WriteLog('Original GitProductURL: ' + GitProductURL);
+    WriteLog('Original GitProductVersionURL: ' + GitProductVersionURL);
 
-    GitProductURL := 'https://api.github.com/repos/' +
+    GitProductVersionURL := 'https://api.github.com/repos/' +
                      TempGitAcc + '/' + TempGitRepo + '/contents/';
 
-    WriteLog('Updated GitProductURL: ' + GitProductURL);
+    WriteLog('Updated GitProductVersionURL: ' + GitProductVersionURL);
   end
   else if lowercase(installtype) = 'changerequest' then
   begin
@@ -683,11 +683,29 @@ begin
   else
   begin
     writelog('Config file not found');
+    {$IFDEF CONSOLE_APP}
     CreateConfig();
     FilePath := { getcurrentdir() } AppDir + 'appsetting.config';
+    {$ELSE}
+    writelog('Its an DLL Call Config file not found so exiting here.');
+    {$ENDIF}
+
   end;
   // Showmessage('Filestream 01');
-  FileStream := TFileStream.Create(FilePath, fmOpenRead or fmShareDenyWrite);
+
+  {$IFDEF CONSOLE_APP}
+  begin
+    WriteLog('readactiveconnection: It is a Console EXE call.');
+    FileStream := TFileStream.Create(FilePath, fmOpenRead or fmShareDenyWrite);
+  end;
+  {$ELSE}
+  begin
+    WriteLog('readactiveconnection: It is a DLL call so skipping file stream.');
+    //FileStream := TFileStream.Create(FilePath, fmOpenRead or fmShareDenyNone);
+  end;
+  {$ENDIF}
+
+  {$IFDEF CONSOLE_APP}
   // Showmessage('Filestream 02');
   if FileStream.Size = 0 then
   begin
@@ -769,6 +787,24 @@ begin
       AppWriteln;
     end;
   end;
+  {$ELSE}
+    writelog('dll part');
+    //FileStream.Free;
+    // Showmessage('FileStream free');
+    writelog('reading json from app dir'+AppDir);
+    JSONText := TFile.ReadAllText( { getcurrentdir() } AppDir +
+      'appsetting.config');
+    // Showmessage('JSONText ');
+    JSONText := Trim(JSONText);
+    JSONText := StringReplace(JSONText, '\\', '\',
+      [rfReplaceAll, rfIgnoreCase]);
+    JSONText := StringReplace(JSONText, '\', '\\',
+      [rfReplaceAll, rfIgnoreCase]);
+    writelog('after reading parsing json');
+    JSONObject := TJSONObject.ParseJSONValue(JSONText) as TJSONObject;
+    writelog('getting appsettings from json file');
+    AppJSONObject := JSONObject.Get('appsettings').JsonValue as TJSONObject;
+  {$ENDIF}
 
   // AppWriteln('Current active connection :' + activeconnection);
   // AppWriteln('press enter to continue or choose connection name to set it default or enter new to add new connection');

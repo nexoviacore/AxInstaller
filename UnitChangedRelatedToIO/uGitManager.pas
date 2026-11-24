@@ -1915,15 +1915,15 @@ begin
 
       WriteLog('Plugin structures pulled successfully for ' + selectedPlugin);
     end
-    else if patchOrPlugin = 'Product' then
+    else if patchOrPlugin = 'ProductVersion' then
     begin
-      WriteLog('Pulling Product Structures from Git');
-      console_write('1. Pulling Product Structure Files from GIT:', 3);
+      WriteLog('Pulling ProductVersion Structures from Git');
+      console_write('1. Pulling ProductVersion Structure Files from GIT:', 3);
       writeln;
-      writeln('  - ' + selectedProduct + ' selected.');
-      WriteLog(selectedProduct + ' start pulling from git');
+      writeln('  - ' + selectedProductVersion + ' selected.');
+      WriteLog(selectedProductVersion + ' start pulling from git');
 
-      CheckExistancePath := ProductLocalPath + selectedPlugin + '\Structures';
+      CheckExistancePath := ProductVersionLocalPath + selectedPlugin + '\Structures';
       WriteLog('Path recevied in CheckExistancePath : ' + CheckExistancePath);
       if DirectoryExists(CheckExistancePath) then
       begin
@@ -1932,16 +1932,16 @@ begin
         CreateDir(CheckExistancePath);
       end;
 
-      CreateFolderStructure(gitproducturl + selectedProduct, 'Structures');
+      CreateFolderStructure(gitProductVersionurl + selectedProductVersion, 'Structures');
       // CreateFolderStructure(GitPluginURL + selectedplugin, 'PluginScripts');
 
       if pageNotFoundError then
         Exit;
 
-      console_write('    - Product Structures pulled successfully.', 10);
+      console_write('    - ProductVersion Structures pulled successfully.', 10);
       writeln;
 
-      WriteLog('Product structures pulled successfully for ' + selectedProduct);
+      WriteLog('ProductVersion structures pulled successfully for ' + selectedProductVersion);
     end
 
     ///changerequest
@@ -2112,20 +2112,20 @@ begin
       WriteLog('files pulled successfully for ' + selectedPlugin);
       Appwriteln;
     end;
-    if patchOrPlugin = 'Product' then
+    if patchOrPlugin = 'ProductVersion' then
     begin
-      WriteLog('Pulling for Product');
+      WriteLog('Pulling for ProductVersion');
       Appwriteln;
-      Appwriteln('Product INSTALLATION PROCESS');
+      Appwriteln('ProductVersion INSTALLATION PROCESS');
       Appwriteln('=============================');
       Appwriteln;
-      ForceDirectories(ProductLocalPath);
-      console_write('1. Pulling Product from GIT:', 3);
+      ForceDirectories(ProductVersionLocalPath);
+      console_write('1. Pulling ProductVersion from GIT:', 3);
       Appwriteln;
-      Appwriteln('  - ' + selectedProduct + ' selected.');
-      Appwriteln('  - Pulling ' + selectedProduct +
+      Appwriteln('  - ' + selectedProductVersion + ' selected.');
+      Appwriteln('  - Pulling ' + selectedProductVersion +
         ' files from GIT one by one:');
-      CheckExistancePath := ProductLocalPath + selectedProduct + '\' + requestedVersion;
+      CheckExistancePath := ProductVersionLocalPath + selectedProductVersion + '\' + requestedVersion;
       WriteLog('Final Path CheckExistancePath : '+ CheckExistancePath);
       if DirectoryExists(CheckExistancePath) then
       begin
@@ -2133,13 +2133,13 @@ begin
         CreateDir(CheckExistancePath)
       end;
       WriteLog('CreateFolderStructure function started..');
-      WriteLog('Final GIT-URL : '+ gitProducturl + selectedProduct+ '/' + requestedVersion);
-      CreateFolderStructure(gitProducturl + selectedProduct+ '/' + requestedVersion, '');
+      WriteLog('Final GIT-URL : '+ gitProductVersionurl + selectedProductVersion+ '/' + requestedVersion);
+      CreateFolderStructure(gitProductVersionurl + selectedProductVersion+ '/' + requestedVersion, '');
       console_write('    - All ', 10);
       write(selectedPlugin);
       console_write(' files pulled successfully.', 10);
       Appwriteln;
-      WriteLog('files pulled successfully for ' + selectedProduct);
+      WriteLog('files pulled successfully for ' + selectedProductVersion);
       Appwriteln;
     end;
 	//ChangeRequest
@@ -2735,8 +2735,8 @@ begin
           // downloadPath := patchLocalPath + '\' + FilePath;
           if patchOrPlugin = 'Plugin' then
             downloadPath := pluginLocalPath + '\' + FilePath
-          else if patchOrPlugin = 'Product' then
-            downloadPath := ProductLocalPath + '\' + FilePath
+          else if patchOrPlugin = 'ProductVersion' then
+            downloadPath := ProductVersionLocalPath + '\' + FilePath
           else if patchOrPlugin = 'ChangeRequest' then
             downloadPath := ChangeRequestLocalPath + '\' + FilePath
           else
@@ -2765,7 +2765,7 @@ begin
             try
               // Check for .zip extention in the files to download.
               // if (lowercase(ExtractFileExt(FilePath)) = '.zip') and
-              // (not SameText(patchOrPlugin, 'Product')) then
+              // (not SameText(patchOrPlugin, 'ProductVersion')) then
               // begin
               // WriteLog('Zip File Found');
               // console_write('Zip File Found');

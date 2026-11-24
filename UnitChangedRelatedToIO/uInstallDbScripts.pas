@@ -71,8 +71,8 @@ begin
     // AxScriptPath := patchLocalPath + selectedPlugin + '\' + cDBScripts + '\';
     if patchOrPlugin = 'Plugin' then
       AxScriptPath := { patchLocalPath } pluginLocalPath + selectedPlugin + '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
-    if patchOrPlugin = 'Product' then
-      AxScriptPath := ProductLocalPath + selectedProduct +'\'+requestedVersion+ '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
+    if patchOrPlugin = 'ProductVersion' then
+      AxScriptPath := ProductVersionLocalPath + selectedProductVersion +'\'+requestedVersion+ '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
     if patchOrPlugin = 'ChangeRequest' then
       AxScriptPath := ChangeRequestLocalPath + selectedCR +'\'+requestedVersion+ '\' + cAxpertStructures + '\' + databasetype + '\' + cDBScripts + '\';
 
@@ -234,7 +234,7 @@ begin
           ExtractFilename(pSQLFileName) + '');
         slist.Clear;
         sqltext.Clear;
-        slist.LoadFromFile(tfile);
+        slist.LoadFromFile(tfile,TEncoding.UTF8);
 
         // If there are no multiple SQLs in the file, then exeucte sqltext directly
         if (pos('<<', slist.text) <= 0) or (pos('>>', slist.text) <= 0) then

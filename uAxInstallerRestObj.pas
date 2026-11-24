@@ -213,7 +213,7 @@ begin
   ACommand := GetJSONString(AJSONObj, 'command');
   ATrace   := GetJSONString(AJSONObj, 'trace');
   AxIns_Username := GetJSONString(AJSONObj, 'username');
-  AxIns_ProductID := GetJSONString(AJSONObj, 'productid');
+  AxIns_ProductVersionID := GetJSONString(AJSONObj, 'productversionid');
   TempGitRepo    := GetJSONString(AJSONObj, 'gitrepo');
   TempGitAcc     := GetJSONString(AJSONObj, 'gitaccount');
   installtype    := GetJSONString(AJSONObj, 'type');
@@ -237,9 +237,9 @@ begin
     Exit;
   end;
 
-  if Trim(AxIns_ProductID) = '' then
+  if Trim(AxIns_ProductVersionID) = '' then
    begin
-    Result.Msg := 'Product_id cannot be empty.';
+    Result.Msg := 'ProductVersion_id cannot be empty.';
     Exit;
   end;
 
@@ -295,8 +295,8 @@ begin
         MainInst.StartPlugin;
 
         { 3. Activate project connection }
-        CfgResult := MainInst.HandleAllConfigCommand(
-                       'config set ' + activeconnection, True);
+//        CfgResult := MainInst.HandleAllConfigCommand(
+//                       'config set ' + activeconnection, True);
 
         { 4. Setup application context }
         MainInst.SetApplication;

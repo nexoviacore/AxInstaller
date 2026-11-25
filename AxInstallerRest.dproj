@@ -6,7 +6,7 @@
         <MainSource>AxInstallerRest.dpr</MainSource>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Library</AppType>
     </PropertyGroup>
@@ -123,13 +123,13 @@ $(PostBuildEvent)]]></PostBuildEvent>
         <DCC_Define>AXINSTALLER_REST_MODE;ForService;ForAxInstaller;withsmtp;NotForRestDLL;DEBUG;$(DCC_Define)</DCC_Define>
         <DCC_DcuOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\32Bit\dcus</DCC_DcuOutput>
         <DCC_ExeOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\32Bit</DCC_ExeOutput>
-        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (32 Bit) (IR11112026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=32Bit (IR11112026);ProgramID=com.embarcadero.$(ModuleName)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (32 Bit) (IR25112026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=32Bit (IR25112026);ProgramID=com.embarcadero.$(ModuleName)</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <VerInfo_MajorVer>11</VerInfo_MajorVer>
         <VerInfo_MinorVer>4</VerInfo_MinorVer>
         <DCC_DebugInformation>false</DCC_DebugInformation>
-        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (64 Bit) (IR19112026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=64Bit (IR19112026);ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Agile Labs;FileDescription=Axpert Installer RESTful Services (64 Bit) (IR25112026);FileVersion=11.4.0.0;InternalName=AxInstallerRest;LegalCopyright=Agile Labs;LegalTrademarks=AXPERT;OriginalFilename=AxInstallerRest;ProductName=Axpert;ProductVersion=11.4.0.0;Comments=64Bit (IR25112026);ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
         <DCC_Define>AXINSTALLER_REST_MODE;ForService;ForAxInstaller;withsmtp;NotForRestDLL;DEBUG;$(DCC_Define)</DCC_Define>
         <DCC_ExeOutput>D:\AxInstaller and AxiGIT-Output\Release\REST DLL\64Bit</DCC_ExeOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
@@ -386,10 +386,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPad_Launch2048">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -432,10 +439,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                 </DeployClass>
                 <DeployClass Name="ProjectOSXEntitlements"/>
                 <DeployClass Name="ProjectiOSResource">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -443,10 +457,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPhone_Launch640">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -472,10 +493,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPhone_Launch320">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -552,10 +580,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSInfoPList"/>
                 <DeployClass Name="iPad_Launch1024">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -582,10 +617,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSDeviceResourceRules"/>
                 <DeployClass Name="iPad_Launch768">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -629,10 +671,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPhone_Launch640x1136">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -672,10 +721,17 @@ $(PostBuildEvent)]]></PostBuildEvent>
                     </Platform>
                 </DeployClass>
                 <DeployClass Name="iPad_Launch1536">
+<<<<<<< Updated upstream
                     <Platform Name="iOSSimulator">
+=======
+                    <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice64">
+>>>>>>> Stashed changes
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="iOSDevice32">
@@ -707,14 +763,23 @@ $(PostBuildEvent)]]></PostBuildEvent>
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
+<<<<<<< Updated upstream
                 <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
+=======
+                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
+>>>>>>> Stashed changes
                 <ProjectRoot Platform="Android" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
+<<<<<<< Updated upstream
                 <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
+=======
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
+>>>>>>> Stashed changes
             </Deployment>
             <Platforms>
                 <Platform value="Win32">True</Platform>

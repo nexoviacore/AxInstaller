@@ -227,32 +227,66 @@ begin
 
   if Trim(ACommand) = '' then
   begin
-    Result.Msg := 'Command cannot be empty.';
+    //Result.Msg := 'Command cannot be empty.';
+    Result.Msg :=
+    '{' +
+    '"result":"Failed",' +
+    '"command":"' + StringReplace(ACommand, '"', '\"', [rfReplaceAll]) + '",' +
+    '"message":"' + StringReplace('Command cannot be empty.', '"', '\"', [rfReplaceAll]) + '"' +
+    '}';
     Exit;
   end;
 
     if Trim(AxIns_Username) = '' then
   begin
-    Result.Msg := 'Username cannot be empty.';
+    //Result.Msg := 'Username cannot be empty.';
+    Result.Msg :=
+    '{' +
+    '"result":"Failed",' +
+    '"command":"' + StringReplace(ACommand, '"', '\"', [rfReplaceAll]) + '",' +
+    '"message":"' + StringReplace('Username cannot be empty.', '"', '\"', [rfReplaceAll]) + '"' +
+    '}';
     Exit;
   end;
 
   if Trim(AxIns_ProductID) = '' then
    begin
+<<<<<<< Updated upstream
     Result.Msg := 'Product_id cannot be empty.';
+=======
+    //Result.Msg := 'ProductVersion_id cannot be empty.';
+    Result.Msg :=
+    '{' +
+    '"result":"Failed",' +
+    '"command":"' + StringReplace(ACommand, '"', '\"', [rfReplaceAll]) + '",' +
+    '"message":"' + StringReplace('ProductVersion_id cannot be empty.', '"', '\"', [rfReplaceAll]) + '"' +
+    '}';
+>>>>>>> Stashed changes
     Exit;
   end;
 
     if Trim(AProject) = '' then
   begin
-    Result.Msg := 'Project Name cannot be empty.';
+    //Result.Msg := 'Project Name cannot be empty.';
+       Result.Msg :=
+    '{' +
+    '"result":"Failed",' +
+    '"command":"' + StringReplace(ACommand, '"', '\"', [rfReplaceAll]) + '",' +
+    '"message":"' + StringReplace('Project Name cannot be empty.', '"', '\"', [rfReplaceAll]) + '"' +
+    '}';
     Exit;
   end;
 
   if SameText(Trim(ACommand), 'quit') then
   begin
-    Result.Success := True;
-    Result.Msg     := 'quit is not supported in API mode.';
+//    Result.Success := True;
+//    Result.Msg     := 'quit is not supported in API mode.';
+      Result.Msg :=
+    '{' +
+    '"result":"Failed",' +
+    '"command":"' + StringReplace(ACommand, '"', '\"', [rfReplaceAll]) + '",' +
+    '"message":"' + StringReplace('quit is not supported in API mode.', '"', '\"', [rfReplaceAll]) + '"' +
+    '}';
     Exit;
   end;
 

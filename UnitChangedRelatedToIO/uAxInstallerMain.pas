@@ -6300,4 +6300,80 @@ begin
     Result := 0;
 end;
 
+<<<<<<< Updated upstream
+=======
+procedure TMain.ClearTempFiles;
+var
+  sExePath, sStartPath, sSessionId, sFolder, sMask, sFull : string;
+  aFolders, aPrefixes : array of string;
+  i, j, res : Integer;
+  SR : TSearchRec;
+begin
+  try
+    if not Assigned(dbm) then
+      Exit;
+    sSessionId := Trim(dbm.gf.sessionid);
+    if sSessionId = '' then
+      Exit;
+    sExePath   := dbm.gf.exepath;
+    sStartPath := dbm.gf.startpath;
+
+    { the 3 temp-file name prefixes - any file whose name starts with
+      "<prefix><SessionID>" gets deleted }
+    SetLength(aPrefixes, 3);
+    aPrefixes[0] := 'import_' + sSessionId;           // #1 - uCreateStructure.ImportStructure
+    aPrefixes[1] := 'iviewtbl_service_' + sSessionId; // #2 - uIViewTables.Create
+    aPrefixes[2] := 'dataupd_' + sSessionId;          // #3 - uStructInTable.Create
+
+    { the folder(s) to check - ExePath and StartPath are the same
+      folder in this REST DLL today, so avoid checking it twice }
+    if SameText(IncludeTrailingPathDelimiter(sExePath),
+                IncludeTrailingPathDelimiter(sStartPath)) then
+    begin
+      SetLength(aFolders, 1);
+      aFolders[0] := sExePath;
+    end
+    else
+    begin
+      SetLength(aFolders, 2);
+      aFolders[0] := sExePath;
+      aFolders[1] := sStartPath;
+    end;
+
+    for i := 0 to High(aFolders) do
+    begin
+      sFolder := Trim(aFolders[i]);
+      if sFolder = '' then
+        Continue;
+      sFolder := IncludeTrailingPathDelimiter(sFolder);
+
+      for j := 0 to High(aPrefixes) do
+      begin
+        sMask := sFolder + aPrefixes[j] + '*';
+        res := FindFirst(sMask, faAnyFile, SR);
+        try
+          while res = 0 do
+          begin
+            if (SR.Attr and faDirectory) = 0 then   { skip folders, just in case }
+            begin
+              sFull := sFolder + SR.Name;
+              if System.SysUtils.DeleteFile(sFull) then
+                WriteLog('ClearTempFiles: Deleted ' + sFull)
+              else
+                WriteLog('ClearTempFiles: Unable to delete ' + sFull);
+            end;
+            res := FindNext(SR);
+          end;
+        finally
+          System.SysUtils.FindClose(SR);
+        end;
+      end;
+    end;
+  except
+    on E: Exception do
+      WriteLog('ClearTempFiles: Error in ClearTempFiles - ' + E.Message);
+  end;
+end;
+
+>>>>>>> Stashed changes
 end.

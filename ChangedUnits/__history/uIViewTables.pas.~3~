@@ -1,0 +1,928 @@
+unit uIViewTables;
+{copied from ver 11.0\ASB}
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, ExtCtrls,Contnrs,jpeg, buttons,StdCtrls,Spin, uAxprovider,uxds,
+  XMLDoc, XMLIntf, uiViewXML;
+type
+  TIViewTables = class
+  private
+    axpro : TAxProvider;
+    cxds,ixds,Sxds : txds;
+    icaption,errorstr : string;
+    axml : IXMLDocument;
+    ErrorFile : TextFile;
+    SQL_LIST : TStringList;
+    procedure InsertIntoIviewButtonsTable;
+    procedure InsertIntoIViewColsTable;
+    procedure InsertIntoIViewMainTable;
+    procedure InsertIntoIviewParamsTable;
+    procedure InsertIntoIviewSqlTable;
+    procedure InsertIntoIviewSubTotalsTable;
+    procedure InsertIntoIviewHyperlinksTable;
+    procedure InsertIntoIviewHypParValTable(iviewname,hypname:String;gnode:IXMLNode);
+    procedure InsertIntoIviewCompsTable(cnode: ixmlnode);
+  public
+    enode : IXmlnode;
+    pnlBtm : TLabel;
+    iname,ErrorMsg : String;
+    constructor create(axp : TAXprovider);
+    destructor destroy;override;
+    procedure InsertIntoIViewTables;
+    procedure UpdateIViewTables;
+    procedure DeleteRecordsInIviewTables;
+  end;
+
+
+implementation
+
+{ TIViewTables }
+
+constructor TIViewTables.create(axp: TAXprovider);
+var
+  fNo : Integer;
+  fName : AnsiString;
+begin
+  axpro := axp;   fNo := 1;
+  cxds := axp.dbm.GetXDS(nil);
+  Sxds := axp.dbm.GetXDS(nil);
+  ixds := axp.dbm.GetXDS(nil);
+  ixds.buffered := true;
+  errorstr := '';
+  ErrorMsg := '';
+  SQL_LIST:= TStringList.Create;
+  {$IFNDEF ForAxInstaller}
+    {$IFNDEF ForService}
+      fName := 'iviewtbl';
+    {$ELSE}
+      fName := 'iviewtbl_service_'+axp.dbm.gf.sessionid;
+    {$ENDIF}
+
+
+  while True do        {since to handle rewrite on multiple running instances "while loop" is add}
+  begin
+    AssignFile(ErrorFile,fname+'.txt');
+    try
+      Rewrite(ErrorFile);
+      break;
+    except on e:Exception do
+      errorstr := e.Message;
+    end;
+    if errorstr <> '' then begin
+      ErrorMsg := Errorstr;
+      fName := fname+inttostr(fNo)+'.txt';
+      inc(fNo);
+      errorstr := '';
+      continue;
+    end;
+  end;
+{$ENDIF}
+end;
+
+destructor TIViewTables.destroy;
+begin
+  if assigned(cxds) then begin
+    cxds.close;
+    cxds.Destroy;
+    cxds := nil;
+  end;
+  if assigned(ixds) then begin
+    ixds.close;
+    ixds.Destroy;
+    ixds := nil;
+  end;
+  if assigned(Sxds) then begin
+    Sxds.close;
+    Sxds.Destroy;
+    Sxds:= nil;
+  end;
+  if assigned(enode) then enode := nil;
+  if assigned(SQL_LIST) then begin
+    FreeAndNil(SQL_LIST);
+  end;
+
+  CloseFile(ErrorFile);
+  inherited;
+end;
+
+procedure TIViewTables.InsertIntoIViewTables;
+begin
+  iname    := VarToStr(enode.Attributes['name']);
+  icaption := VarToStr(enode.Attributes['caption']);
+  ErrorMsg := '';
+  DeleteRecordsInIviewTables;
+  InsertIntoIViewMainTable;
+  InsertIntoIViewColsTable;
+  InsertIntoIviewSubTotalsTable;
+  InsertIntoIviewButtonsTable;
+  InsertIntoIviewParamsTable;
+  InsertIntoIviewSqlTable;
+  InsertIntoIviewHyperlinksTable;
+
+end;
+
+procedure TIViewTables.UpdateIViewTables;
+begin
+  ixds.CDS.CommandText := 'select distinct name from iviews';
+  ixds.open;
+  if ixds.CDS.RecordCount > 0 then begin
+    while not ixds.cds.Eof do begin
+      try
+        axml := axpro.GetStructure('iviews',ixds.CDS.FieldByName('name').AsString,'','');
+        enode := axml.DocumentElement;
+        iname    := VarToStr(enode.Attributes['name']);
+        icaption := VarToStr(enode.Attributes['caption']);
+        DeleteRecordsInIviewTables;
+        if assigned(pnlBtm) then begin
+          pnlBtm.Caption := 'Storing Values to '+iname+'(IView) tables';
+          pnlBtm.Refresh;
+        end;
+        InsertIntoIViewMainTable;
+        InsertIntoIViewColsTable;
+        InsertIntoIviewSubTotalsTable;
+        InsertIntoIviewButtonsTable;
+        InsertIntoIviewParamsTable;
+        InsertIntoIviewSqlTable;
+        InsertIntoIviewHyperlinksTable;
+        ixds.CDS.Next;
+      Except on E:Exception do
+        begin
+          errorstr := e.Message;
+        end;
+      end;
+      if errorstr <> '' then begin
+        if assigned(axpro) then begin
+          axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\UpdateIViewTables - '+errorstr);
+          axpro.dbm.gf.DoDebug.Msg(errorstr);
+        end;
+        ErrorMsg := Errorstr;
+        Writeln(ErrorFile,errorstr);
+        ixds.CDS.Next;
+      end;
+    end;
+  end;
+end;
+
+
+Procedure TIViewTables.InsertIntoIViewMainTable;
+var
+  i : integer;
+  w,h1,s,h2,h3,f1,f2,grand_total,disp_params,load_tstruct,v,pTable: string;
+  inode,fnode,n : IXMLNode;
+begin
+  errorstr := '';
+  try
+    inode := enode.ChildNodes.FindNode('iview');
+    h1 := VarToStr(inode.ChildNodes.FindNode(xml_reportheading1).NodeValue);
+    h2 := VarToStr(inode.ChildNodes.FindNode(xml_reportheading2).NodeValue);
+    h3 := VarToStr(inode.ChildNodes.FindNode(xml_reportheading3).NodeValue);
+    f1 := VarToStr(inode.ChildNodes.FindNode(xml_reportfooter1).NodeValue);
+    f2 := VarToStr(inode.ChildNodes.FindNode(xml_reportfooter2).NodeValue);
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_grandtotal).NodeValue)) = 'true' then grand_total := 'T'
+    else grand_total := 'F';
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_displayParamWin).NodeValue)) = 'true' then disp_params := 'T'
+    else disp_params := 'F';
+    load_tstruct := VarToStr(inode.ChildNodes.FindNode(xml_loadtstruct).NodeValue);
+    n := inode.ChildNodes.FindNode(xml_loadtstruct);
+    load_tstruct := VarToStr(n.NodeValue);
+    pTable := VarToStr(n.Attributes['ptable']);
+    cxds.close;
+    cxds.Submit('INAME',iname,'c');
+    cxds.Submit('CAPTION',icaption,'c');
+    cxds.Submit('HEADER1',h1,'c');
+    cxds.Submit('HEADER2',h2,'c');
+    cxds.Submit('HEADER3',h3,'c');
+    cxds.Submit('FOOTER1',f1,'c');
+    cxds.Submit('FOOTER2',f2,'c');
+    cxds.Submit('GRAND_TOTAL',grand_total,'c');
+    cxds.Submit('DISPLAY_PARAMS',disp_params,'c');
+    cxds.Submit('LOAD_TSTRUCT',load_tstruct,'c');
+    cxds.Submit('pTable',pTable,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_trailingspace).NodeValue);
+    cxds.Submit('TRAILING_PAGE',v,'n');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_printpagetotal).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('PRINTPAGE_TOTAL',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_expressionset).NodeValue);
+    cxds.Submit('EXPRESSION_SET',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_groupfield).NodeValue);
+    cxds.Submit('GROUP_FIELD',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_linesperpage).NodeValue);
+    cxds.Submit('LINES_PER_PAGE',v,'n');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_font).NodeValue);
+    cxds.Submit('FONT',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_rowseparator).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('ROW_SEPERATOR',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_captioncolumn).NodeValue);
+    cxds.Submit('CAPTION_COLUMN',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_folder).NodeValue);
+    cxds.Submit('FOLDER',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_printersettings).NodeValue);
+    cxds.Submit('PRINTER_SETTINGS',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_optiontype).NodeValue);
+    cxds.Submit('OPTION_TYPE',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_totalseparator).NodeValue);
+    cxds.Submit('TOTAL_SEPERATOR',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_dosgraphicmode).NodeValue);
+    cxds.Submit('DOS_GRAPHIC_MODE',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_linespace).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('LINE_SPACE',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_condensed).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('CONDENSED',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_pagefooter1).NodeValue);
+    cxds.Submit('PAGE_FOOTER1',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_pagefooter2).NodeValue);
+    cxds.Submit('PAGE_FOOTER2',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_pagefooter3).NodeValue);
+    cxds.Submit('PAGE_FOOTER3',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_reportfooter3).NodeValue);
+    cxds.Submit('REPORT_FOOTER3',v,'c');
+    v :=VarToStr(inode.ChildNodes.FindNode(xml_recordidcolumn).NodeValue);
+    cxds.Submit('RECORDID_COLUMN',v,'n');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_filterexpression).NodeValue);
+    cxds.Submit('FILTER_EXPRESSION',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_factor).NodeValue);
+    cxds.Submit('FACTOR',v,'n');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_printlogo).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+     cxds.Submit('PRINT_LOGO',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_headinglinespace).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('HEADING_LINE_SPACE',v,'c');
+    fnode := inode.ChildNodes.FindNode(xml_detailsinfooter);
+    if fnode <> nil then begin
+      if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_detailsinfooter).NodeValue)) = 'true' then v := 'T'
+      else v := 'F';
+    end else v := 'F';
+    cxds.Submit('DETAILS_IN_FOOTER',v,'c');
+    fnode := inode.ChildNodes.FindNode(xml_headerAlign);
+    if fnode <> nil then begin
+      v := VarToStr(fnode.NodeValue);
+      cxds.Submit('HEADER_ALIGN',v,'c');
+    end;
+    fnode := inode.ChildNodes.FindNode(xml_footerAlign);
+    if fnode <> nil then begin
+      v := VarToStr(fnode.NodeValue);
+      cxds.Submit('FOOTER_ALIGN',v,'c');
+    end;
+    v := VarToStr(inode.ChildNodes.FindNode(xml_nextqueryname).NodeValue);
+    cxds.Submit('NEXT_QUERYNAME',v,'c');
+    v :=VarToStr(inode.ChildNodes.FindNode(xml_transid).NodeValue);
+    cxds.Submit('TRANSID',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_printername).NodeValue);
+    cxds.Submit('PRINTER_NAME',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_reportstyle).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('REPORT_STYLE',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_printindexpage).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+     cxds.Submit('PRINT_INDEXPAGE',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_hidden).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('HIDDEN',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_absolutecheck).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('ABSOLUTE_CHECK',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_headingcolor).NodeValue);
+    cxds.Submit('HEADING_COLOR',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_heading1font).NodeValue);
+    cxds.Submit('HEADING1_FONT',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_heading2font).NodeValue);
+    cxds.Submit('HEADING2_FONT',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_heading3font).NodeValue);
+    cxds.Submit('HEADING3_FONT',v,'c');
+    v :=VarToStr(inode.ChildNodes.FindNode(xml_headrowcolor).NodeValue);
+    cxds.Submit('HEAD_ROWCOLOR',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_headrowfont).NodeValue);
+    cxds.Submit('HEAD_ROWFONT',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_oddcolor).NodeValue);
+    cxds.Submit('ODD_COLOR',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_evencolor).NodeValue);
+    cxds.Submit('EVEN_COLOR',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_rowheight).NodeValue);
+    cxds.Submit('ROW_HEIGHT',v,'n');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_fixedrows).NodeValue);
+    cxds.Submit('FIXED_ROWS',v,'n');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_papersize).NodeValue);
+    cxds.Submit('PAPER_SIZE',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_source).NodeValue);
+    cxds.Submit('SOURCE_KEY',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_orientation).NodeValue);
+    cxds.Submit('ORIENTATION',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_noofcopies).NodeValue);
+    cxds.Submit('NO_OF_COPIES',v,'n');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_openform).NodeValue);
+    cxds.Submit('OPEN_FORM',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_extractdata).NodeValue);
+    cxds.Submit('EXTRACT_DATA',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_beforefill).NodeValue);
+    cxds.Submit('BEFORE_FILL',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_click).NodeValue);
+    cxds.Submit('CLICK',v,'c');
+    v := VarToStr(inode.ChildNodes.FindNode(xml_dblclick).NodeValue);
+    cxds.Submit('DBLCLICK',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_hideFirstCol).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('HIDE_FIRSTCOL',v,'c');
+    if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_hideColumnLines).NodeValue)) = 'true' then v := 'T'
+    else v := 'F';
+    cxds.Submit('HIDE_COLUMN_LINES',v,'c');
+    fnode := inode.ChildNodes.FindNode(xml_showgraph);
+    if (fnode<>nil) then
+    begin
+      if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_showgraph).NodeValue)) = 'true' then v := 'T'
+      else v := 'F';
+      cxds.Submit('SH_GRAPH',v,'c');
+    end;
+    fnode := inode.ChildNodes.FindNode(xml_fittopage);
+    if (fnode<>nil) then begin
+      if lowercase(VarToStr(inode.ChildNodes.FindNode(xml_fittopage).NodeValue)) = 'true' then v := 'T'
+      else v := 'F';
+      cxds.Submit('FITTOPAGE',v,'c');
+    end;
+    v := Trim(VarToStr(inode.Attributes['parrange']));
+    if v = '' then v := '1';
+    cxds.Submit('parrange',v,'n');
+    fnode := inode.ChildNodes.FindNode(xml_viewtype);
+    if assigned(fnode) then begin
+      v := VarToStr(fnode.NodeValue);
+      cxds.Submit('ViewType',v,'c');
+    end;
+    fnode := inode.ChildNodes.FindNode(xml_CachingType);
+    if assigned(fnode) then begin
+      v := VarToStr(fnode.NodeValue);
+      cxds.Submit('Caching_Type',v,'c');
+    end;
+    fnode := inode.ChildNodes.FindNode(xml_pagesize);
+    if assigned(fnode) then begin
+      v := VarToStr(fnode.NodeValue);
+      cxds.Submit('Page_Size',v,'n');
+    end;
+    w := 'INAME =' +QuotedStr(iname);
+    cxds.AddOrEdit('IVIEWMAIN',w);
+    cxds.close;
+  Except on E:Exception do
+    begin
+      errorstr := e.Message;
+    end;
+  end;
+  if errorstr <> '' then begin
+    if assigned(axpro) then begin
+      axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIViewMainTable - '+errorstr);
+      axpro.dbm.gf.DoDebug.Msg(errorstr);
+    end;
+    ErrorMsg := Errorstr;
+    Writeln(ErrorFile,errorstr);
+  end;
+end;
+
+procedure TIViewTables.InsertIntoIViewColsTable;
+var
+  i,j,k : integer;
+  colnode,cnode,n : IXMLNode;
+  w,fname,fcaption,decimals,dtype,exp,run_tot,disp_tot,hidden,f,nname : string;
+begin
+  k := 0;
+  for I := 0 to enode.ChildNodes.Count - 1 do begin
+    nname := vartostr(enode.ChildNodes[i].Attributes['cat']);
+    if (nname = 'querycol') or (nname = 'column') then begin
+      try
+        inc(k);
+        colnode := enode.ChildNodes[i];
+        fname   :=  VarToStr(colnode.ChildNodes.FindNode(xml_columnname).NodeValue);
+        fcaption := VarToStr(colnode.ChildNodes.FindNode(xml_columnheading).NodeValue);
+        decimals := VarToStr(colnode.ChildNodes.FindNode(xml_decimals).NodeValue);
+        if VarToStr(colnode.ChildNodes.FindNode(xml_datatype).NodeValue) = 'Date/Time' then dtype := 'D'
+        else if VarToStr(colnode.ChildNodes.FindNode(xml_datatype).NodeValue) = 'Character' then dtype := 'C'
+        else dtype := 'N';
+        exp := VarToStr(colnode.ChildNodes.FindNode(xml_expression).NodeValue);
+        if  lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_runningtotal).NodeValue)) = 'true' then run_tot := 'T'
+        else run_tot := 'F';
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_displaytotal).NodeValue))= 'true' then disp_tot := 'T'
+        else disp_tot := 'F';
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_hidden).NodeValue))= 'true' then hidden := 'T'
+        else hidden := 'F';
+        cxds.ClearEdit;
+        cxds.Submit('INAME',iname,'c');
+        cxds.Submit('ICAPTION',icaption,'c');
+        cxds.Submit('F_NAME',fname,'c');
+        cxds.Submit('F_CAPTION',fcaption,'c');
+        cxds.Submit('DECIMALS',decimals,'n');
+        cxds.Submit('DATATYPE',dtype,'c');
+        cxds.Submit('HIDDEN',hidden,'c');
+        cxds.Submit('EXPRESSION',exp,'c');
+        cxds.Submit('RUNNING_TOTAL',run_tot,'c');
+        cxds.Submit('DISPLAY_TOTAL',disp_tot,'c');
+        cxds.Submit('Colcat',nname,'c');
+        cxds.Submit('ordno',IntToStr(k),'n');
+        if (nname = 'querycol') then begin
+          f := VarToStr(colnode.ChildNodes.FindNode(xml_queryname).NodeValue);
+          cxds.Submit('QUERY_NAME',f,'c');
+        end;
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_norepeat).NodeValue))= 'true' then f := 'T'
+        else f := 'F';
+        cxds.Submit('NO_REPEAT',f,'c');
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_applycomma).NodeValue))= 'true' then f := 'T'
+        else f := 'F';
+        cxds.Submit('APPLY_COMMA',f,'c');
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_setfactor).NodeValue))= 'true' then f := 'T'
+        else f := 'F';
+        cxds.Submit('SET_FACTOR',f,'c');
+        f :=VarToStr(colnode.ChildNodes.FindNode(xml_alignment).NodeValue);
+        cxds.Submit('ALIGNMENT',f,'c');
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_colseparator).NodeValue))= 'true' then f := 'T'
+        else f := 'F';
+        cxds.Submit('COL_SEPERATOR',f,'c');
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_zerooff).NodeValue))= 'true' then f := 'T'
+        else f := 'F';
+        cxds.Submit('ZERO_OFF',f,'c');
+        if lowercase(VarToStr(colnode.ChildNodes.FindNode(xml_computepost).NodeValue))= 'true' then f := 'T'
+        else f := 'F';
+        cxds.Submit('COMPUTE_POST',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_color).NodeValue);
+        cxds.Submit('COLOR',f,'c');
+        f :=  VarToStr(colnode.ChildNodes.FindNode(xml_font).NodeValue);
+        cxds.Submit('FONT',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_columnwidth).NodeValue);
+        cxds.Submit('COLUMN_WIDTH',f,'n');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_displayexpression).NodeValue);
+        cxds.Submit('DISP_EXPR',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_beforefill).NodeValue);
+        cxds.Submit('BEFORE_FILL',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_click).NodeValue);
+        cxds.Submit('CLICK',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_dblclick).NodeValue);
+        cxds.Submit('DBLCLICK',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_tablename).NodeValue);
+        cxds.Submit('TABLE_NAME',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_searchname).NodeValue);
+        cxds.Submit('SEARCH_NAME',f,'c');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_groupno).NodeValue);
+        cxds.Submit('GROUP_NO',f,'n');
+        f := VarToStr(colnode.ChildNodes.FindNode(xml_groupheading).NodeValue);
+        cxds.Submit('GROUP_HEADING',f,'c');
+        cnode := colnode.ChildNodes.FindNode(xml_setcellfont);
+        if cnode = nil then
+          f := ''
+        else begin
+          f := '';
+          if not (cnode.NodeType in [ntElement, ntText]) then
+          begin
+            for j := 0 to cnode.ChildNodes.Count-1 do begin
+              n := cnode.ChildNodes[j];
+              f := f+n.NodeValue+'~'+VarToStr(n.Attributes['textstyle'])+'@#';
+            end;
+          end;
+        end;
+        cxds.Submit('SET_CELLFONT',f,'c');
+        w := 'INAME = '+QuotedStr(iname)+ 'and F_NAME = '+ QuotedStr(fname);
+        cxds.AddOrEdit('IVIEWCOLS',w);
+        cxds.close;
+      Except on E:Exception do
+        begin
+          if assigned(axpro) then
+             axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIViewColsTable - '+e.Message);
+          axpro.dbm.gf.DoDebug.Msg(E.Message);
+          Writeln(ErrorFile,e.Message);
+          continue;
+        end;
+      end;
+    end;
+  end;
+end;
+
+
+
+procedure TIViewTables.InsertIntoIviewSubTotalsTable;
+var
+  i,k : integer;
+  subNode, n : IXMLNode;
+  w,keycol,header,footer,caption,subtotal_ord,m,hcolor,fcolor: string;
+begin
+  k:=0;
+  for I := 0 to enode.ChildNodes.Count - 1 do begin
+    if vartostr(enode.ChildNodes[i].Attributes['cat']) = 'subtotals' then begin
+      try
+        inc(k);
+        subNode := enode.ChildNodes[i];
+        keycol := VarToStr(subnode.ChildNodes.FindNode(xml_blockedcolumn).NodeValue);
+        n := subnode.ChildNodes.FindNode(xml_headercaption);
+        header := VarToStr(n.NodeValue);
+        hcolor := VarToStr(n.Attributes['fcolor']);
+        n := subnode.ChildNodes.FindNode(xml_footercaption);
+        footer := VarToStr(n.NodeValue);
+        fcolor := VarToStr(n.Attributes['fcolor']);
+        caption := VarToStr(subnode.ChildNodes.FindNode(xml_captioncolumn).NodeValue);
+        subtotal_ord := VarToStr(subnode.ChildNodes.FindNode(xml_totalorder).NodeValue);
+        w := 'INAME = '+ QuotedStr(iname)+ 'and KEY_COLUMN = ' + QuotedStr(keycol) ;
+        cxds.ClearEdit;
+        cxds.Submit('INAME',iname,'c');
+        cxds.Submit('KEY_COLUMN',keycol,'c');
+        cxds.Submit('HEADER',header,'c');
+        cxds.Submit('HEADER_COLOR',hcolor,'c');
+        cxds.Submit('FOOTER',footer,'c');
+        cxds.Submit('FOOTER_COLOR',fcolor,'c');
+        cxds.Submit('CAPTION',caption,'c');
+        cxds.Submit('SUBTOTAL_ORDER',subtotal_ord,'c');
+        cxds.Submit('ordno',IntToStr(k),'n');
+        if lowercase(VarToStr(subnode.ChildNodes.FindNode(xml_linespace).NodeValue))= 'true' then m := 'T'
+        else m := 'F';
+        cxds.Submit('LINE_SPACE',m,'c');
+        if lowercase(VarToStr(subnode.ChildNodes.FindNode(xml_pageskip).NodeValue))= 'true' then m := 'T'
+        else m := 'F';
+        cxds.Submit('PAGESKIP',m,'c');
+        m := lowercase(VarToStr(subnode.Attributes['totalontop']));
+        if m = 'true' then m := 'T' else m := 'F';
+        cxds.Submit('Total_Ontop',m,'c');
+        cxds.AddOrEdit('IVIEWSUBTOTALS',w);
+        cxds.close;
+      Except on E:Exception do
+        begin
+          if assigned(axpro) then
+             axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewSubTotalsTable - '+e.Message);
+          axpro.dbm.gf.DoDebug.Msg(E.Message);
+          Writeln(ErrorFile,e.Message);
+          continue;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure TIViewTables.InsertIntoIviewButtonsTable;
+var
+  i : integer;
+  cnode,compnode : IXMLNode;
+  w,btnName,caption,hint,ctype,k: string;
+begin
+  compnode := enode.ChildNodes.FindNode('comps');
+  ctype   := VarToStr(compnode.NodeName);
+  InsertIntoIviewCompsTable(compnode);
+  for I := 0 to compnode.ChildNodes.Count - 1 do begin
+    try
+      cnode := compnode.ChildNodes[i];
+      btnName := VarToStr(cnode.NodeName);
+      caption := VarToStr(cnode.Attributes['caption']);
+      hint    := VarToStr(cnode.Attributes['hint']);
+      cxds.ClearEdit;
+      cxds.Submit('INAME',iname,'c');
+      cxds.Submit('BUTTON_NAME',btnName,'c');
+      cxds.Submit('CAPTION',caption,'c');
+      cxds.Submit('HINT',hint,'c');
+      cxds.Submit('ordno',IntToStr(i+1),'n');
+      k := VarToStr(cnode.Attributes['img']);
+      cxds.Submit('IMG',k,'c');
+      k := VarToStr(cnode.Attributes['position']);
+      cxds.Submit('POSITION',k,'c');
+      k := VarToStr(cnode.Attributes['flat']);
+      cxds.Submit('FLAT',k,'c');
+      if cnode.HasAttribute('down') then
+        k := VarToStr(cnode.Attributes['down'])
+      else
+        k := '';
+      cxds.Submit('DOWN',k,'c');
+      k := VarToStr(cnode.Attributes['sname']);
+      cxds.Submit('SNAME',k,'c');
+      k := VarToStr(cnode.Attributes['container']);
+      cxds.Submit('BCONTAINER',k,'c');
+      k := VarToStr(cnode.Attributes['action']);
+      cxds.Submit('ACTION',k,'c');
+      k := VarToStr(cnode.Attributes['task']);
+      cxds.Submit('BTASK',k,'c');
+      k := VarToStr(cnode.Attributes['def']);
+      cxds.Submit('BDEF',k,'c');
+      k := VarToStr(cnode.Attributes['cat']);
+      cxds.Submit('CAT',k,'c');
+      k := VarToStr(cnode.Attributes['parent']);
+      cxds.Submit('BPARENT',k,'c');
+      k := VarToStr(cnode.Attributes['tlhw']);
+      cxds.Submit('TLHW',k,'c');
+      k := VarToStr(cnode.Attributes['font']);
+      cxds.Submit('FONT',k,'c');
+      k := VarToStr(cnode.Attributes['file']);
+      cxds.Submit('BFILE',k,'c');
+      k := VarToStr(cnode.Attributes['align']);
+      cxds.Submit('BALIGN',k,'c');
+      w := 'INAME = '+ QuotedStr(iname) + 'and BUTTON_NAME =' + QuotedStr(btnName);
+      cxds.AddOrEdit('IVIEWBUTTONS',w);
+      cxds.close;
+    Except on E:Exception do
+      begin
+        if assigned(axpro) then
+          axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewButtonsTable - '+e.Message);
+        axpro.dbm.gf.DoDebug.Msg(E.Message);
+        Writeln(ErrorFile,e.Message);
+        continue;
+      end;
+    end;
+  end;
+end;
+
+procedure TIViewTables.InsertIntoIviewCompsTable(cnode:ixmlnode);
+var w,k:string;
+begin
+  try
+  cxds.ClearEdit;
+  cxds.Submit('INAME',iname,'c');
+  k := VarToStr(cnode.Attributes['LocalNum']);
+  cxds.Submit('LocalNum',k,'n');
+  k := VarToStr(cnode.Attributes['btn']);
+  cxds.Submit('ABTN',k,'n');
+  k := VarToStr(cnode.Attributes['vupd']);
+  cxds.Submit('VUPD',k,'c');
+  k := VarToStr(cnode.Attributes['pnlheight']);
+  cxds.Submit('pnl_height',k,'n');
+  w := 'INAME = '+ QuotedStr(iname);
+  cxds.AddOrEdit('IVIEWCOMPS',w);
+  cxds.close;
+  Except on E:Exception do
+    begin
+      if assigned(axpro) then
+        axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewCompsTable - '+e.Message);
+      axpro.dbm.gf.DoDebug.Msg(E.Message);
+      Writeln(ErrorFile,e.Message);
+    end;
+  end;
+end;
+
+
+procedure TIViewTables.InsertIntoIviewParamsTable;
+var
+ i,j,k : integer;
+ paramNode, n,pnode : IXMLNode;
+ blobno,w,sql,pname,pcaption,dtype,decimals,parhidden,value,sugg,exp,valexp,moe,d :  string;
+ pordno : String;
+begin
+  k:=0;
+  for I := 0 to enode.ChildNodes.Count - 1 do begin
+    if vartostr(enode.ChildNodes[i].Attributes['cat']) = 'params' then begin
+      try
+        inc(k);
+        paramNode := enode.ChildNodes[i];
+        pordno := paramnode.Attributes['ord'];
+        pname := VarToStr(paramNode.ChildNodes.FindNode(xml_name).NodeValue);
+        pcaption := VarToStr(paramNode.ChildNodes.FindNode(xml_caption).NodeValue);
+        if VarToStr(paramNode.ChildNodes.FindNode(xml_datatype).NodeValue) = 'Character' then dtype := 'C'
+        else if VarToStr(paramNode.ChildNodes.FindNode(xml_datatype).NodeValue) = 'Date/Time' then dtype := 'D'
+        else dtype := 'N';
+        if lowercase(vartostr(paramNode.ChildNodes.FindNode(xml_expression).Attributes['sugg']))= 'true' then sugg := 'T'
+        else sugg := 'F';
+        exp := VarToStr(paramNode.ChildNodes.FindNode(xml_expression).NodeValue);
+        valexp := VarToStr(paramNode.ChildNodes.FindNode(xml_validateexpression).NodeValue);
+        if lowercase(VarToStr(paramNode.ChildNodes.FindNode(xml_hidden).NodeValue)) = 'true' then parhidden := 'T'
+        else parhidden := 'F';
+        sql := VarToStr(paramNode.ChildNodes.FindNode(xml_paramsqlname).NodeValue);
+        decimals := VarToStr(paramNode.ChildNodes.FindNode(xml_decimals).NodeValue);
+        value := VarToStr(paramNode.ChildNodes.FindNode(xml_pvalue).NodeValue);
+        moe := VarToStr(paramNode.ChildNodes.FindNode(xml_modeofentry).NodeValue);
+        blobno := '1';
+        cxds.ClearEdit;
+        cxds.Submit('INAME',iname,'c');
+        cxds.Submit('PNAME',pname,'c');
+        cxds.Submit('PCAPTION',pcaption,'c');
+        cxds.Submit('DTYPE',dtype,'c');
+        cxds.Submit('SUGGESTIVE',sugg,'c');
+        cxds.Submit('EXP',exp,'c');
+        cxds.Submit('VAL_EXP',valexp,'c');
+        cxds.Submit('HIDDEN',parhidden,'c');
+        cxds.Submit('DECIMALS',decimals,'n');
+        cxds.Submit('VALUE',value,'c');
+        cxds.Submit('MOE',moe,'c');
+        cxds.Submit('SCRIPTTEXT',sql,'c');
+        cxds.Submit('BLOBNO',blobno,'n');
+        cxds.Submit('PORD',pordno,'n');
+        cxds.Submit('ordno',inttostr(k),'n');
+//      d := VarToStr(paramNode.ChildNodes.FindNode('a15').NodeValue);
+        n := paramNode.ChildNodes.FindNode(xml_Deps);
+        if n = nil  then
+          d := ''
+        else
+          d := vartostr(n.ChildValues['s']);
+        cxds.Submit('DEPS',d,'c');
+        if lowercase(VarToStr(paramNode.ChildNodes.FindNode(xml_multiselect).NodeValue)) = 'true' then d := 'T'
+        else d := 'F';
+        cxds.Submit('MULTISELECT',d,'c');
+        if lowercase(VarToStr(paramNode.ChildNodes.FindNode(xml_dynamicparam).NodeValue)) = 'true' then d := 'T'
+        else d := 'F';
+        cxds.Submit('DYNAMIC_PARAM',d,'c');
+        d := VarToStr(paramNode.ChildNodes.FindNode(xml_queryname).NodeValue);
+        cxds.Submit('QUERY_NAME',d,'c');
+        if lowercase(VarToStr(paramNode.ChildNodes.FindNode(xml_savevalue).NodeValue)) = 'true' then d := 'T'
+        else d := 'F';
+        cxds.Submit('SAVE_VALUE',d,'c');
+        n := paramNode.ChildNodes.FindNode(xml_width);
+        if n<> nil then  begin
+          d:=VarToStr(n.NodeValue);
+          cxds.Submit('PARAM_WIDTH',d,'n');
+        end;
+        n := paramNode.ChildNodes.FindNode(xml_clrcache);
+        if n<> nil then  begin
+          if lowercase(VarToStr(n.NodeValue)) = 'true' then d := 'T'
+          else d := 'F';
+        end else d:= 'F';
+        cxds.Submit('clrcache',d,'c');
+        pnode := paramNode.ChildNodes.FindNode(xml_picklistcols);
+        d:='';
+        if pnode<>nil then begin
+          for j := 0 to pnode.ChildNodes.Count-1 do begin
+            n := pnode.ChildNodes[j];
+            d:= d+n.Attributes['ci']+'~'+n.Attributes['cn']+'@#';
+          end;
+        end;
+        cxds.Submit('Picklist_cols',d,'c');
+        w := 'INAME = '+quotedstr(iname)+'and PNAME = ' + QuotedStr(pname);
+
+        cxds.AddOrEdit('IVIEWPARAMS',w);
+        cxds.close;
+      Except on E:Exception do
+        begin
+          if assigned(axpro) then
+            axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewParamsTable - '+e.Message);
+          axpro.dbm.gf.DoDebug.Msg(E.Message);
+          Writeln(ErrorFile,e.Message);
+          continue;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure TIViewTables.InsertIntoIviewSqlTable;
+var
+  i,j,ordno : integer;
+  fnode,sqlnode,temp : IXMLNode;
+  blobno,w,sql_text,stype,task,relat_field,cat, sName : string;
+begin
+  sql_text := '';
+//  sql_list:= TStringList.Create;
+  ordno := 0;
+  for I := 0 to enode.ChildNodes.Count - 1 do begin
+    if (vartostr(enode.ChildNodes[i].Attributes['cat']) = 'sql') or
+       (vartostr(enode.ChildNodes[i].Attributes['cat']) = 'expr') then begin
+      try
+        inc(ordno);
+        sqlnode := enode.ChildNodes[i];
+        sName := sqlnode.NodeName;
+        cat := sqlnode.Attributes['cat'];
+        temp := sqlnode.ChildNodes.FindNode(xml_sqltext);                                 //****changed due to split of xml_sqltext node*****
+        fnode := temp.ChildNodes.findnode('l0');
+        if (temp.ChildNodes.Count>0) and assigned(fnode) then begin
+          sql_list.Clear;
+          for j := 0 to temp.ChildNodes.Count - 1 do
+          begin
+            sql_list.Add(vartostr(temp.ChildNodes[j].NodeValue));
+          end;
+          sql_text:=sql_list.Text;
+        end
+        else begin
+          sql_text := VarToStr(sqlnode.ChildNodes.FindNode(xml_sqltext).NodeValue);
+        end;
+        stype := VarToStr(sqlnode.ChildNodes.FindNode(xml_sqltype).NodeValue);
+        task := VarToStr(sqlnode.ChildNodes.FindNode(xml_queryname).NodeValue);
+        blobno := '1';
+        relat_field := VarToStr(sqlnode.ChildNodes.FindNode(xml_relationfield).NodeValue);
+        w := 'INAME =' + quotedstr(iname) +'and TASK = '+ quotedstr(task) + 'and TYPE = '+ quotedstr(stype);
+        cxds.ClearEdit;
+        cxds.close;
+        cxds.Submit('INAME',iname,'c');
+        cxds.Submit('SNAME',sname,'c');
+        cxds.Submit('ORDNO',IntToStr(ordno),'n');
+        cxds.Submit('SCRIPTTEXT',sql_text,'c');
+        cxds.Submit('CAT',cat,'c');
+        cxds.Submit('TYPE',stype,'c');
+        cxds.Submit('TASK',task,'c');
+        cxds.Submit('BLOBNO',blobno,'n');
+        cxds.Submit('RELATION_FIELD',relat_field,'c');
+        cxds.AddOrEdit('IVIEWSQL',w);
+        cxds.close;
+      Except on E:Exception do
+        begin
+          if assigned(axpro) then
+            axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewSqlTable - '+e.Message);
+          axpro.dbm.gf.DoDebug.Msg(E.Message);
+          Writeln(ErrorFile,e.Message);
+          continue;
+        end;
+      end;
+    end;
+  end;
+
+end;
+
+procedure TIViewTables.InsertIntoIviewHyperlinksTable;
+var
+i,j: Integer;
+hypnode,temp,pnode : IXMLNode;
+hypname,w,b : String;
+begin
+    for i := 0 to enode.ChildNodes.Count-1 do
+    begin
+      if (vartostr(enode.ChildNodes[i].Attributes['cat']) = 'hyperlinks') then begin
+      hypnode := enode.ChildNodes[i];
+      try
+        cxds.close;
+        for j := 0 to hypnode.ChildNodes.Count-1 do
+        begin
+          cxds.ClearEdit;
+          temp := hypnode.ChildNodes[j];
+          cxds.Submit('INAME',iname,'c');
+          hypname := VarToStr(temp.NodeName);
+          cxds.Submit('HYPNAME',hypname,'c');
+          b := VarToStr(temp.Attributes['sname']);
+          cxds.Submit('SNAME',b,'c');
+          b := VarToStr(temp.Attributes['source']);
+          cxds.Submit('HYPSOURCE',b,'c');
+          if lowercase(VarToStr(temp.Attributes['pop'])) = 'true' then b := 'T'
+          else b := 'F';
+          cxds.Submit('POPUP',b,'c');
+          if lowercase(VarToStr(temp.Attributes['refresh'])) = 'true' then b := 'T'
+          else b := 'F';
+          cxds.Submit('HYPREFRESH',b,'c');
+          if lowercase(VarToStr(temp.Attributes['load'])) = 'true' then b := 'T'
+          else b := 'F';
+          cxds.Submit('LOADNAME',b,'c');
+          cxds.Submit('ordno',IntToStr(j+1),'n');
+          w := 'INAME =' + quotedstr(iname)+'and HYPNAME = '+ quotedstr(hypname) ;
+          cxds.AddOrEdit('IVIEWHYPLINK',w);
+          cxds.close;
+          InsertIntoIviewHypParValTable(iname,hypname,temp);
+        end;
+      Except on E:Exception do
+        begin
+          if assigned(axpro) then
+            axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewHyperlinksTable - '+e.Message);
+          axpro.dbm.gf.DoDebug.Msg(E.Message);
+          Writeln(ErrorFile,e.Message);
+          continue;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure TIViewTables.InsertIntoIviewHypParValTable(iviewname,hypname:String;gnode:IXMLNode);
+var
+k : Integer;
+fldname,fldvalue,t : String;
+begin
+    Sxds.close;
+    for k := 0 to gnode.ChildNodes.Count-1 do begin
+      try
+        fldname := VarToStr(gnode.ChildNodes[k].Attributes['n']);
+        fldvalue := VarToStr(gnode.ChildNodes[k].Attributes['v']);
+        t := 'INAME =' + quotedstr(iname)+'and HYPNAME = '+ quotedstr(hypname)+'and FIELD = '+ quotedstr(fldname);
+        Sxds.ClearEdit;
+        Sxds.Submit('INAME',iviewname,'c');
+        Sxds.Submit('HYPNAME',hypname,'c');
+        Sxds.Submit('FIELD',fldname,'c');
+        Sxds.Submit('PARVALUE',fldvalue,'c');
+        Sxds.AddOrEdit('IVIEWHYPPARVAL',t);
+        Sxds.close;
+      Except on E:Exception do
+      begin
+        if assigned(axpro) then
+          axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\InsertIntoIviewHypParValTable - '+e.Message);
+        axpro.dbm.gf.DoDebug.Msg(E.Message);
+        Writeln(ErrorFile,e.Message);
+        continue;
+      end;
+      end;
+    end;
+end;
+
+procedure TIViewTables.DeleteRecordsInIviewTables;
+var
+  i : integer;
+  SQLList : TStringList;
+begin
+  SQLList := TStringList.Create;
+  SQLList.Add('delete from IVIEWMAIN WHERE INAME ='+QuotedStr(iname));
+  SQLList.Add('delete from IVIEWCOLS WHERE INAME ='+ QuotedStr(iname));
+  SQLList.Add('delete from IVIEWBUTTONS WHERE INAME ='+ QuotedStr(iname));
+  SQLList.Add('delete from IVIEWSUBTOTALS WHERE INAME ='+ QuotedStr(iname));
+  SQLList.Add('delete from IVIEWPARAMS  WHERE INAME ='+ QuotedStr(iname));
+  SQLList.Add('delete from IVIEWSQL WHERE INAME ='+ QuotedStr(iname));
+  SQLList.Add('delete from IVIEWHYPLINK WHERE INAME ='+ QuotedStr(iname));
+  SQLList.Add('delete from IVIEWHYPPARVAL WHERE INAME ='+ QuotedStr(iname));
+  for I := 0 to SQLList.Count - 1 do begin
+    try
+      axpro.ExecSQL(SQLList[i],'','',false);
+    Except on E:Exception do
+      begin
+        if assigned(axpro) then
+            axpro.dbm.gf.DoDebug.Log(axpro.dbm.gf.Axp_logstr+'\uIViewTables\DeleteRecordsInIviewTables - '+e.Message);
+        axpro.dbm.gf.DoDebug.Msg(E.Message);
+        Writeln(ErrorFile,e.Message);
+        Continue;
+      end;
+    end;
+  end;
+  FreeAndNil(SQLList);
+end;
+
+end.

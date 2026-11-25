@@ -113,6 +113,8 @@ type
     // procedure PullPluginOperation;
     procedure WriteUserInstructions;
     procedure startplugin;
+
+    procedure ClearTempFiles;
   end;
 
 implementation
@@ -6298,6 +6300,64 @@ begin
     Result := -1
   else
     Result := 0;
+end;
+
+procedure TMain.ClearTempFiles;
+var
+  sExePath, sStartPath, sSessionId, sFolder, sFull : string;
+  aFolders, aFiles : array of string;
+  i, j : Integer;
+begin
+  try
+    if not Assigned(dbm) then
+      Exit;
+    sSessionId := Trim(dbm.gf.sessionid);
+    if sSessionId = '' then
+      Exit;
+    sExePath   := dbm.gf.exepath;
+    sStartPath := dbm.gf.startpath;
+
+    { the 3 temp files to look for, built from the current SessionID }
+    SetLength(aFiles, 3);
+    aFiles[0] := 'import_' + sSessionId + '.txt';           // #1 - uCreateStructure.ImportStructure
+    aFiles[1] := 'iviewtbl_service_' + sSessionId + '.txt'; // #2 - uIViewTables.Create
+    aFiles[2] := 'dataupd_' + sSessionId + '.txt';          // #3 - uStructInTable.Create
+
+    if SameText(IncludeTrailingPathDelimiter(sExePath),
+                IncludeTrailingPathDelimiter(sStartPath)) then
+    begin
+      SetLength(aFolders, 1);
+      aFolders[0] := sExePath;
+    end
+    else
+    begin
+      SetLength(aFolders, 2);
+      aFolders[0] := sExePath;
+      aFolders[1] := sStartPath;
+    end;
+
+    for i := 0 to High(aFolders) do
+    begin
+      sFolder := Trim(aFolders[i]);
+      if sFolder = '' then
+        Continue;
+
+      for j := 0 to High(aFiles) do
+      begin
+        sFull := IncludeTrailingPathDelimiter(sFolder) + aFiles[j];
+        if FileExists(sFull) then
+        begin
+          if System.SysUtils.DeleteFile(sFull) then
+            WriteLog('ClearTempFiles: Deleted ' + sFull)
+          else
+            WriteLog('ClearTempFiles: Unable to delete ' + sFull);
+        end;
+      end;
+    end;
+  except
+    on E: Exception do
+      WriteLog('ClearTempFiles: Error in ClearTempFiles - ' + E.Message);
+  end;
 end;
 
 end.

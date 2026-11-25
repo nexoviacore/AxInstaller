@@ -355,6 +355,11 @@ begin
       end;
     end;
   finally
+    if Assigned(MainInst) then
+    begin
+      MainInst.ClearTempFiles;
+      FreeAndNil(MainInst);
+    end;
     UpdateLogObj;
     DestroyLogObj;
     InstallErrMsg := '';

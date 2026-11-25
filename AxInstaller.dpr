@@ -93,7 +93,7 @@ uses
   uAPILoggingImpl in 'ChangedUnits\uAPILoggingImpl.pas',
   uAxProvider in '\\192.168.2.6\Axpert9-XE3\Ver 11.2\uAxProvider.pas',
   uDoDebug in '\\192.168.2.6\Axpert9-XE3\Ver 11.1\uDoDebug.pas',
-  uGeneralFunctions in 'Serverfile\uGeneralFunctions.pas',
+  uGeneralFunctions in '\\192.168.2.6\Axpert9-XE3\Ver 11.2\uGeneralFunctions.pas',
   uProvidelink in '\\192.168.2.6\Axpert9-XE3\Ver 11.3\AsbCommonObjs\uProvidelink.pas',
   uProfitQuery in '\\192.168.2.6\Axpert9-XE3\Ver 10.9\WebFix4\uProfitQuery.pas',
   uStructInTable in 'ChangedUnits\uStructInTable.pas',

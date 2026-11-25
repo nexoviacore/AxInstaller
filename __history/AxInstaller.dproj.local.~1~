@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+    <Transaction>1899-12-30 00:00:00.000.480,D:\AxInstaller\AxInstaller.dproj=D:\AxInstallerRest\AxInstaller.dproj</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.825,\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uCreateStructure.pas=D:\AxInstallerRest\ChangedUnits\uCreateStructure.pas</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.084,\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uIViewTables.pas=D:\AxInstaller\ChangedUnits\uIViewTables.pas</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.634,D:\AxInstaller\AxInstaller.dproj=D:\AxInstaller\AxInstaller1.dproj</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.431,\\192.168.2.6\Axpert9-XE3\Ver 11.2\uGeneralFunctions.pas=D:\AxInstaller\Serverfile\uGeneralFunctions.pas</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.032,\\192.168.2.6\Axpert9-XE3\Ver 11.1\uStructInTable.pas=D:\AxInstaller\ChangedUnits\uStructInTable.pas</Transaction>
+>>>>>>> Stashed changes
+    <Transaction>1899-12-30 00:00:00.000.841,D:\AxInstaller\AxInstaller1.dproj=D:\AxInstaller\AxInstaller.dproj</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.825,\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uCreateStructure.pas=D:\AxInstallerRest\ChangedUnits\uCreateStructure.pas</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.480,D:\AxInstaller\AxInstaller.dproj=D:\AxInstallerRest\AxInstaller.dproj</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.634,D:\AxInstaller\AxInstaller.dproj=D:\AxInstaller\AxInstaller1.dproj</Transaction>
+=======
+    <Transaction>1899-12-30 00:00:00.000.841,D:\AxInstaller\AxInstaller.dproj=D:\AxInstaller\AxInstaller1.dproj</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.480,D:\AxInstallerRest\AxInstaller.dproj=D:\AxInstaller\AxInstaller.dproj</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.825,D:\AxInstallerRest\ChangedUnits\uCreateStructure.pas=\\192.168.2.6\Axpert9-XE3\Ver 11.0\Asb\uCreateStructure.pas</Transaction>
+    <Transaction>1899-12-30 00:00:00.000.634,D:\AxInstaller\AxInstaller1.dproj=D:\AxInstaller\AxInstaller.dproj</Transaction>
+>>>>>>> Stashed changes
+  </Transactions>
+</BorlandProject>
